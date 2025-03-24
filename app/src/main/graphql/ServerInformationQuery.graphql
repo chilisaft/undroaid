@@ -1,0 +1,17 @@
+query ServerInformationQuery {
+    server {
+        owner {
+            userId
+            username
+            url
+            avatar
+        }
+        guid
+        apikey
+        name
+        wanip
+        lanip
+        localurl
+        remoteurl
+    }
+}
