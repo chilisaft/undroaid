@@ -1,7 +1,7 @@
 package com.chilisaft.undroaid.data.repository
 
 import com.apollographql.apollo.ApolloClient
-import com.chilisaft.undroaid.app.ServerInformationQuery
+import com.chilisaft.undroaid.graphql.ServerInformationQuery
 import com.chilisaft.undroaid.data.models.Owner
 import com.chilisaft.undroaid.data.models.Server
 import javax.inject.Inject

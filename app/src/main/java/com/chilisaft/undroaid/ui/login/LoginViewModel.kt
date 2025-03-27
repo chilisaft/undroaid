@@ -5,11 +5,19 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.chilisaft.undroaid.data.repository.ServerRepository
-import com.chilisaft.undroaid.ui.login.LoginScreenState
 import com.chilisaft.undroaid.utils.Storage
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+
+sealed interface LoginScreenState {
+    data object Loading : LoginScreenState
+    data object Success : LoginScreenState
+    data class Error(val throwable: Throwable) : LoginScreenState
+}
 
 @HiltViewModel
 class LoginViewModel @Inject constructor(
@@ -17,7 +25,19 @@ class LoginViewModel @Inject constructor(
     private val storage: Storage
 ): ViewModel() {
 
-    val status: LiveData<LoginScreenState>
+    val uiState: StateFlow<LoginScreenState> = myModelRepository
+        .myModels.map<List<String>, LoginScreenState>(::Success)
+        .catch { emit(Error(it)) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), Loading)
+
+    fun addMyModel(name: String) {
+        viewModelScope.launch {
+            myModelRepository.add(name)
+        }
+    }
+
+
+    val status: StateFlow<LoginScreenState>
         get() = _status
 
     private var shouldShowHelpMessage: Boolean = false
@@ -25,7 +45,9 @@ class LoginViewModel @Inject constructor(
     val helpMessage: LiveData<Boolean>
         get() = _helpMessage
 
-    private val _status = MutableLiveData<LoginScreenState>()
+    private val _status = MutableStateFlow<LoginScreenState>(
+        value = TODO()
+    )
     private val _helpMessage = MutableLiveData(false)
     private var errorCount = 0
 
