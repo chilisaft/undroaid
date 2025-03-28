@@ -48,23 +48,26 @@ fun UndroaidNavGraph(
 
         NavHost(
             navController = navController,
-            startDestination = startDestination,
+            startDestination = currentRoute,
             modifier = Modifier.padding(innerPadding)
         ) {
             composable(UndroaidRoutes.ARRAY_ROUTE) {
-                ArrayScreen()
+                navActions.navigateToArray()
             }
             composable(UndroaidRoutes.DASHBOARD_ROUTE) {
-                DashboardScreen()
+                navActions.navigateToDashboard()
             }
             composable(UndroaidRoutes.SHARES_ROUTE) {
-                SharesScreen()
+                navActions.navigateToShares()
             }
             composable(UndroaidRoutes.SERVER_ROUTE) {
-                ServerScreen()
+                navActions.navigateToServer()
             }
             composable(UndroaidRoutes.VIRTUALIZATION_ROUTE) {
-                VirtualizationScreen()
+                navActions.navigateToVirtualization()
+            }
+            composable(UndroaidRoutes.LOGIN_ROUTE) {
+                navActions.navigateToLogin()
             }
         }
 

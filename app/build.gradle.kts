@@ -101,6 +101,7 @@ dependencies {
     implementation(libs.hilt.android.core)
     implementation(libs.androidx.hilt.navigation.compose)
     implementation(libs.androidx.preference.ktx)
+    implementation(libs.androidx.ui.text.google.fonts)
     ksp(libs.hilt.compiler)
 
     // Jetpack Compose

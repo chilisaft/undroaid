@@ -1,121 +1,78 @@
 package com.advice.array.login
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.chilisaft.undroaid.data.models.Login
+import com.chilisaft.undroaid.data.repository.LoginRepository
 import com.chilisaft.undroaid.data.repository.ServerRepository
 import com.chilisaft.undroaid.utils.Storage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
 
-sealed interface LoginScreenState {
-    data object Loading : LoginScreenState
-    data object Success : LoginScreenState
-    data class Error(val throwable: Throwable) : LoginScreenState
-}
+data class LoginScreenState(
+    val serverUrl: String = "",
+    val apiToken: String = "",
+    val isLoading: Boolean = false,
+    val error: String? = null,
+    val isLoggedIn: Boolean = false
+)
 
 @HiltViewModel
 class LoginViewModel @Inject constructor(
-    private val serverRepository: ServerRepository,
-    private val storage: Storage
-): ViewModel() {
+    private val loginRepository: LoginRepository
+) : ViewModel() {
 
-    val uiState: StateFlow<LoginScreenState> = myModelRepository
-        .myModels.map<List<String>, LoginScreenState>(::Success)
-        .catch { emit(Error(it)) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), Loading)
-
-    fun addMyModel(name: String) {
-        viewModelScope.launch {
-            myModelRepository.add(name)
-        }
-    }
-
-
-    val status: StateFlow<LoginScreenState>
-        get() = _status
-
-    private var shouldShowHelpMessage: Boolean = false
-
-    val helpMessage: LiveData<Boolean>
-        get() = _helpMessage
-
-    private val _status = MutableStateFlow<LoginScreenState>(
-        value = TODO()
-    )
-    private val _helpMessage = MutableLiveData(false)
-    private var errorCount = 0
-
-    val uuid: LiveData<String>
-        get() = _uuid
-
-    private val _uuid = MutableLiveData<String>()
-
-    val loginMessage: LiveData<String>
-        get() = _loginMessage
-
-    private val _loginMessage = MutableLiveData<String>()
+    private val _uiState = MutableStateFlow(LoginScreenState())
+    val uiState: StateFlow<LoginScreenState> = _uiState.asStateFlow()
 
     init {
-        _uuid.value = storage.uuid
-
-        _status.postValue(LoginScreenState.Init)
-
-        val address = storage.address
-        val apiToken = storage.apiToken
-        if (!address.isNullOrBlank() && !apiToken.isNullOrBlank()) {
-            testLogin(address, apiToken, track = false)
-        }
-
-        // fetchLoginConfig()
-    }
-
-    fun testLogin(address: String, apiToken: String, track: Boolean = true) {
-        _status.postValue(LoginScreenState.Loading)
-        viewModelScope.launch {
-            storage.address = address
-            storage.apiToken = apiToken
-            val result = serverRepository.getServerInformation()
-            when (result.isSuccess) {
-                true -> {
-                    errorCount = 0
-
-                    _status.postValue(LoginScreenState.Success)
-                }
-
-                false -> {
-                    if (++errorCount >= 3 && shouldShowHelpMessage) {
-                        _helpMessage.postValue(true)
-                    }
-                    _status.postValue(LoginScreenState.Error(result.exceptionOrNull()?.message ?: "Unknown error"))
-                }
+        val savedLogin = loginRepository.getSavedLogin()
+        if (!savedLogin.serverUrl.isNullOrBlank() && !savedLogin.apiToken.isNullOrBlank()) {
+            _uiState.value = _uiState.value.copy(
+                serverUrl = savedLogin.serverUrl,
+                apiToken = savedLogin.apiToken
+            )
+            runBlocking {
+                login()
             }
         }
     }
 
-    fun reset() {
-        _helpMessage.value = false
-        errorCount = 0
+    fun onServerUrlChange(serverUrl: String) {
+        _uiState.value = _uiState.value.copy(serverUrl = serverUrl, error = null)
     }
 
-//    private fun fetchLoginConfig() {
-//        val db = Firebase.firestore
-//        db.collection("config")
-//            .document("login")
-//            .get()
-//            .addOnSuccessListener {
-//                try {
-//                    val config = it.toObject(FirebaseLoginConfig::class.java)
-//                    _loginMessage.value = config?.message
-//                    shouldShowHelpMessage = config?.shouldShowHelpMessage ?: false
-//                } catch (ex: Exception) {
-//                    // do nothing
-//                }
-//            }
-//    }
+    fun onApiTokenChange(apiToken: String) {
+        _uiState.value = _uiState.value.copy(apiToken = apiToken, error = null)
+    }
+
+    fun login() {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+            val result = loginRepository.login(Login(_uiState.value.serverUrl, _uiState.value.apiToken))
+            _uiState.value = _uiState.value.copy(isLoading = false)
+
+            result.fold(
+                onSuccess = { isLoggedIn ->
+                    _uiState.value = _uiState.value.copy(isLoggedIn = isLoggedIn)
+                },
+                onFailure = { exception ->
+                    _uiState.value = _uiState.value.copy(error = exception.message)
+                }
+            )
+        }
+    }
+
+
 }

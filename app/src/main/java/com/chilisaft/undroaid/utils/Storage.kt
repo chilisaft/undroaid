@@ -26,22 +26,10 @@ class Storage @Inject constructor(
             securePreferences.edit() { putString(KEY_API_TOKEN, value) }
         }
 
-    override var address: String?
-        get() = securePreferences.getString(KEY_ADDRESS, null)
+    override var serverUrl: String?
+        get() = securePreferences.getString(KEY_SERVER_URL, null)
         set(value) {
-            securePreferences.edit() { putString(KEY_ADDRESS, value) }
-        }
-
-    override var username: String?
-        get() = securePreferences.getString(KEY_USERNAME, null)
-        set(value) {
-            securePreferences.edit() { putString(KEY_USERNAME, value) }
-        }
-
-    override var password: String?
-        get() = securePreferences.getString(KEY_PASSWORD, null)
-        set(value) {
-            securePreferences.edit() { putString(KEY_PASSWORD, value) }
+            securePreferences.edit() { putString(KEY_SERVER_URL, value) }
         }
 
     override var lastNotification: String?
@@ -69,12 +57,8 @@ class Storage @Inject constructor(
         }
 
     companion object {
-        private const val KEY_CONFIG = "config"
         private const val KEY_API_TOKEN = "api_token"
-        private const val KEY_ADDRESS = "address"
-        private const val KEY_USERNAME = "username"
-        private const val KEY_PASSWORD = "password"
-        private const val KEY_SERVER_CONFIG = "server_config"
+        private const val KEY_SERVER_URL = "serverUrl"
         private const val KEY_LAST_NOTIFICATION = "last_notification"
         private const val KEY_THEME = "theme"
         private const val KEY_SHOW_CORE_LIST = "show_core_list"

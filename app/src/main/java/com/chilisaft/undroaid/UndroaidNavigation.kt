@@ -21,6 +21,7 @@ object UndroaidRoutes {
     const val SHARES_ROUTE = "shares"
     const val VIRTUALIZATION_ROUTE = "virtualization"
     const val SERVER_ROUTE = "server"
+    const val LOGIN_ROUTE = "login"
 }
 
 
@@ -117,6 +118,17 @@ class UndroaidNavigationActions(private val navController: NavHostController) {
             popUpTo(navController.graph.findStartDestination().id) {
                 saveState = true
             }
+            launchSingleTop = true
+            restoreState = true
+        }
+    }
+
+    fun navigateToLogin() {
+        navController.navigate(UndroaidRoutes.LOGIN_ROUTE) {
+            popUpTo(navController.graph.findStartDestination().id) {
+                saveState = true
+            }
+
             launchSingleTop = true
             restoreState = true
         }

@@ -1,0 +1,6 @@
+query TestLoginQuery {
+    server {
+        guid
+        name
+    }
+}

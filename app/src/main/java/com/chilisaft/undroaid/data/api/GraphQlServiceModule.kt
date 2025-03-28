@@ -15,7 +15,7 @@ class GraphQlServiceModule @Inject constructor() {
     @Provides
     fun provideGraphQlServiceModule (authInterceptor: AuthInterceptor, storage: Storage): ApolloClient {
         return ApolloClient.Builder()
-            .serverUrl(storage.address + "/graphql")
+            .serverUrl(storage.serverUrl + "/graphql")
             .addHttpInterceptor(authInterceptor)
             .build()
     }
