@@ -17,8 +17,8 @@ import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -59,7 +59,7 @@ fun LoginScreen(onLoginSuccessful: () -> Unit){
                 .fillMaxSize()
                 .padding(horizontal = 30.dp)
         ) {
-            Spacer(modifier = Modifier.height(40.dp))
+            Spacer(modifier = Modifier.height(150.dp))
             Text(text = "Unraid Login", fontSize = 36.sp, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(20.dp))
             ServerUrlField(
@@ -75,11 +75,10 @@ fun LoginScreen(onLoginSuccessful: () -> Unit){
                 modifier = Modifier.fillMaxWidth()
             )
             Spacer(modifier = Modifier.height(10.dp))
-            Button(
+            FilledTonalButton (
                 onClick = { viewModel.login() },
                 enabled = viewModel.isLoginEnabled(),
-                shape = RoundedCornerShape(30),
-                modifier = Modifier.fillMaxWidth(fraction = 0.8f)
+
             ) {
                 if (uiState.isLoading) {
                     CircularProgressIndicator(modifier = Modifier.size(20.dp))
