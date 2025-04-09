@@ -42,10 +42,9 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.advice.array.login.LoginViewModel
 
 @Composable
-fun LoginScreen(){
+fun LoginScreen(onLoginSuccessful: () -> Unit){
     val viewModel: LoginViewModel = hiltViewModel()
     val uiState by viewModel.uiState.collectAsState()
 
@@ -77,8 +76,8 @@ fun LoginScreen(){
             )
             Spacer(modifier = Modifier.height(10.dp))
             Button(
-                onClick = { },
-                enabled = true,
+                onClick = { viewModel.login() },
+                enabled = viewModel.isLoginEnabled(),
                 shape = RoundedCornerShape(30),
                 modifier = Modifier.fillMaxWidth(fraction = 0.8f)
             ) {
@@ -91,6 +90,9 @@ fun LoginScreen(){
             if (uiState.error != null) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(text = uiState.error!!, color = MaterialTheme.colorScheme.error)
+            }
+            if (uiState.isLoggedIn) {
+                onLoginSuccessful()
             }
 
         }

@@ -1,21 +1,13 @@
-package com.advice.array.login
+package com.chilisaft.undroaid.ui.login
 
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import androidx.lifecycle.LiveData
-import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.chilisaft.undroaid.data.models.Login
 import com.chilisaft.undroaid.data.repository.LoginRepository
-import com.chilisaft.undroaid.data.repository.ServerRepository
-import com.chilisaft.undroaid.utils.Storage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
@@ -55,6 +47,10 @@ class LoginViewModel @Inject constructor(
 
     fun onApiTokenChange(apiToken: String) {
         _uiState.value = _uiState.value.copy(apiToken = apiToken, error = null)
+    }
+
+    fun isLoginEnabled(): Boolean {
+        return uiState.value.serverUrl.isNotBlank() && uiState.value.apiToken.isNotBlank()
     }
 
     fun login() {

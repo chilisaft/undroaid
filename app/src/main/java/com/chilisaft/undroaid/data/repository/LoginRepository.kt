@@ -16,7 +16,7 @@ class LoginRepository @Inject constructor(
         return try {
             val response = apolloClient.query(TestLoginQuery()).execute()
             if (!response.hasErrors()) {
-                response.data?.server?.let { serverData ->
+                response.data?.server?.let {
                     Result.success(true)
                 }
                     ?: Result.failure(Exception("GraphQL error: ${response.errors?.joinToString { it.message }}"))

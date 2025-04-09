@@ -13,6 +13,9 @@ class AuthInterceptor @Inject constructor(private var storage: Storage) : HttpIn
         request: HttpRequest,
         chain: HttpInterceptorChain
     ): HttpResponse {
+        if (request.url.isBlank()) {
+            chain.proceed(request.newBuilder(url = storage.serverUrl ?: "").build())
+        }
         return chain.proceed(request.newBuilder().addHeader("X-API-KEY", storage.apiToken ?: "").build())
     }
 }
