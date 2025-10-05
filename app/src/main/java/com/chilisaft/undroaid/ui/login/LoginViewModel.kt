@@ -8,8 +8,8 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
 
 data class LoginScreenState(
@@ -35,40 +35,38 @@ class LoginViewModel @Inject constructor(
                 serverUrl = savedLogin.serverUrl,
                 apiToken = savedLogin.apiToken
             )
-            runBlocking {
-                login()
-            }
+            // Perform automatic login on a background thread without blocking
+            login()
         }
     }
 
     fun onServerUrlChange(serverUrl: String) {
-        _uiState.value = _uiState.value.copy(serverUrl = serverUrl, error = null)
+        _uiState.update { it.copy(serverUrl = serverUrl, error = null) }
     }
 
     fun onApiTokenChange(apiToken: String) {
-        _uiState.value = _uiState.value.copy(apiToken = apiToken, error = null)
+        _uiState.update { it.copy(apiToken = apiToken, error = null) }
     }
 
     fun isLoginEnabled(): Boolean {
-        return uiState.value.serverUrl.isNotBlank() && uiState.value.apiToken.isNotBlank()
+        return uiState.value.serverUrl.isNotBlank() && uiState.value.apiToken.isNotBlank() && !uiState.value.isLoading
     }
 
     fun login() {
+        if (uiState.value.isLoading) return
+
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+            _uiState.update { it.copy(isLoading = true, error = null) }
             val result = loginRepository.login(Login(_uiState.value.serverUrl, _uiState.value.apiToken))
-            _uiState.value = _uiState.value.copy(isLoading = false)
 
             result.fold(
                 onSuccess = { isLoggedIn ->
-                    _uiState.value = _uiState.value.copy(isLoggedIn = isLoggedIn)
+                    _uiState.update { it.copy(isLoggedIn = isLoggedIn, isLoading = false) }
                 },
                 onFailure = { exception ->
-                    _uiState.value = _uiState.value.copy(error = exception.message)
+                    _uiState.update { it.copy(error = exception.message, isLoading = false) }
                 }
             )
         }
     }
-
-
 }

@@ -1,21 +1,36 @@
 package com.chilisaft.undroaid.data.api
 
 import com.apollographql.apollo.ApolloClient
-import com.chilisaft.undroaid.utils.Storage
+import com.apollographql.apollo.network.okHttpClient
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
-import dagger.hilt.android.components.ActivityRetainedComponent
-import javax.inject.Inject
+import dagger.hilt.components.SingletonComponent
+import okhttp3.OkHttpClient
+import javax.inject.Singleton
 
 @Module
-@InstallIn(ActivityRetainedComponent::class)
-class GraphQlServiceModule @Inject constructor() {
+@InstallIn(SingletonComponent::class)
+object GraphQlServiceModule {
 
     @Provides
-    fun provideGraphQlServiceModule (authInterceptor: AuthInterceptor, storage: Storage): ApolloClient {
+    @Singleton
+    fun provideOkHttpClient(urlRewriteInterceptor: UrlRewriteInterceptor): OkHttpClient {
+        return OkHttpClient.Builder()
+            .addInterceptor(urlRewriteInterceptor)
+            .build()
+    }
+
+    @Provides
+    @Singleton
+    fun provideApolloClient(
+        authInterceptor: AuthInterceptor,
+        okHttpClient: OkHttpClient
+    ): ApolloClient {
         return ApolloClient.Builder()
-            .serverUrl(storage.serverUrl + "/graphql")
+            // This placeholder URL will be replaced by the UrlRewriteInterceptor
+            .serverUrl("http://placeholder/graphql")
+            .okHttpClient(okHttpClient)
             .addHttpInterceptor(authInterceptor)
             .build()
     }

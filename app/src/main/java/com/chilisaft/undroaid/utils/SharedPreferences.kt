@@ -4,7 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import androidx.preference.PreferenceManager
 import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKeys
+import androidx.security.crypto.MasterKey
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -36,12 +36,12 @@ object SharedPreferences {
     @Provides
     @EncryptedPreferences
     fun provideEncryptedSharedPreferences(@ApplicationContext context: Context): SharedPreferences {
-        val masterKeyAlias = MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC)
-
+        // This is the correct, non-deprecated method for creating EncryptedSharedPreferences.
+        // It takes the master key alias as a String and manages the key lifecycle internally.
         return EncryptedSharedPreferences.create(
-            "encrypted_prefs",
-            masterKeyAlias,
-            context,
+            "encrypted_prefs", // 1. The file name
+            MasterKey.DEFAULT_MASTER_KEY_ALIAS, // 2. The master key alias
+            context, // 3. The context
             EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
         )

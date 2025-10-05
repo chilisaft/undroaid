@@ -1,6 +1,7 @@
 package com.chilisaft.undroaid.data.repository
 
 import com.apollographql.apollo.ApolloClient
+import com.apollographql.apollo.exception.ApolloException
 import com.chilisaft.undroaid.data.models.Login
 import com.chilisaft.undroaid.graphql.TestLoginQuery
 import com.chilisaft.undroaid.utils.Storage
@@ -11,19 +12,28 @@ class LoginRepository @Inject constructor(
     private val storage: Storage
 ) {
     suspend fun login(login: Login): Result<Boolean> {
+        // Temporarily set credentials for the login attempt.
+        // The AuthInterceptor will use these.
         storage.serverUrl = login.serverUrl
         storage.apiToken = login.apiToken
+
         return try {
             val response = apolloClient.query(TestLoginQuery()).execute()
-            if (!response.hasErrors()) {
-                response.data?.server?.let {
-                    Result.success(true)
-                }
-                    ?: Result.failure(Exception("GraphQL error: ${response.errors?.joinToString { it.message }}"))
+
+            if (response.data?.server != null && !response.hasErrors()) {
+                // Login successful, credentials are valid and now stored.
+                Result.success(true)
             } else {
-                Result.failure(Exception("GraphQL error: ${response.errors?.joinToString { it.message }}"))
+                // Clear credentials if login failed
+                storage.serverUrl = ""
+                storage.apiToken = ""
+                val errorMessage = response.errors?.joinToString { it.message } ?: "Login failed"
+                Result.failure(Exception(errorMessage))
             }
-        } catch (e: Exception) {
+        } catch (e: ApolloException) {
+            // Clear credentials if login failed due to a network or parsing error
+            storage.serverUrl = ""
+            storage.apiToken = ""
             Result.failure(e)
         }
     }
@@ -31,5 +41,4 @@ class LoginRepository @Inject constructor(
     fun getSavedLogin(): Login {
         return Login(storage.serverUrl, storage.apiToken)
     }
-
 }
