@@ -1,3 +1,5 @@
+import com.android.build.api.dsl.ApplicationExtension
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -5,9 +7,18 @@ plugins {
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
     alias(libs.plugins.compose.compiler)
+    alias(libs.plugins.kotlin.allopen)
 }
 
-android {
+allOpen {
+    annotation("dagger.hilt.android.lifecycle.HiltViewModel")
+    annotation("dagger.Module")
+    annotation("dagger.hilt.InstallIn")
+    annotation("jakarta.inject.Singleton")
+    annotation("jakarta.inject.Inject")
+}
+
+extensions.configure<ApplicationExtension> {
     namespace = "com.chilisaft.undroaid"
     compileSdk = 36
 
@@ -18,12 +29,16 @@ android {
         versionCode = 1
         versionName = "1.0"
 
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner = "com.chilisaft.undroaid.HiltTestRunner"
     }
 
     buildTypes {
-        release {
+        getByName("debug") {
             isMinifyEnabled = false
+        }
+        getByName("release") {
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -31,54 +46,23 @@ android {
         }
     }
 
-    buildTypes {
-        getByName("debug") {
-            isMinifyEnabled = false
-            enableAndroidTestCoverage = false
-            proguardFiles(getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro")
-            testProguardFiles(
-                getDefaultProguardFile("proguard-android.txt"),
-                "proguardTest-rules.pro"
-            )
-        }
-
-        getByName("release") {
-            isMinifyEnabled = true
-            isShrinkResources = true
-            proguardFiles(getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro")
-            testProguardFiles(
-                getDefaultProguardFile("proguard-android.txt"),
-                "proguardTest-rules.pro"
-            )
-        }
-    }
-
-    testOptions.unitTests {
-        isIncludeAndroidResources = true
-
-        all { test ->
-            with(test) {
-                testLogging {
-                    events = setOf(
-                        org.gradle.api.tasks.testing.logging.TestLogEvent.PASSED,
-                        org.gradle.api.tasks.testing.logging.TestLogEvent.SKIPPED,
-                        org.gradle.api.tasks.testing.logging.TestLogEvent.FAILED,
-                        org.gradle.api.tasks.testing.logging.TestLogEvent.STANDARD_OUT,
-                        org.gradle.api.tasks.testing.logging.TestLogEvent.STANDARD_ERROR,
-                    )
-                }
-            }
-        }
-    }
-
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_21
         targetCompatibility = JavaVersion.VERSION_21
     }
+
     buildFeatures {
         compose = true
         buildConfig = true
         viewBinding = true
+    }
+
+    packaging {
+        resources {
+            excludes.add("/META-INF/{AL2.0,LGPL2.1}")
+            excludes.add("META-INF/LICENSE.md")
+            excludes.add("META-INF/LICENSE-notice.md")
+        }
     }
 }
 
@@ -88,7 +72,6 @@ dependencies {
     implementation(libs.androidx.annotation)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.timber)
-    implementation(libs.androidx.test.espresso.idling.resources)
 
     // Architecture Components
     implementation(libs.androidx.lifecycle.runtimeCompose)
@@ -99,7 +82,9 @@ dependencies {
     implementation(libs.androidx.hilt.navigation.compose)
     implementation(libs.androidx.preference.ktx)
     implementation(libs.androidx.ui.text.google.fonts)
+    implementation(libs.androidx.runtime)
     ksp(libs.hilt.compiler)
+    ksp(libs.kotlinx.metadata)
 
     // Jetpack Compose
     val composeBom = platform(libs.androidx.compose.bom)
@@ -118,7 +103,6 @@ dependencies {
 
     debugImplementation(composeBom)
     debugImplementation(libs.androidx.compose.ui.tooling.core)
-    debugImplementation(libs.androidx.compose.ui.test.manifest)
 
     // Dependencies for local unit tests
     testImplementation(composeBom)
@@ -126,21 +110,33 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.android)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.androidx.navigation.testing)
-    testImplementation(libs.androidx.test.espresso.core)
-    testImplementation(libs.androidx.test.espresso.contrib)
-    testImplementation(libs.androidx.test.espresso.intents)
     testImplementation(libs.google.truth)
+    testImplementation(libs.mockk)
+    testImplementation(libs.mockwebserver)
     testImplementation(libs.androidx.compose.ui.test.junit)
 
     // JVM tests - Hilt
     testImplementation(libs.hilt.android.testing)
     kspTest(libs.hilt.compiler)
+    kspTest(libs.kotlinx.metadata)
 
     // Dependencies for Android unit tests
     androidTestImplementation(composeBom)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(libs.androidx.compose.ui.test.junit)
+    androidTestImplementation(libs.mockk.android)
+    androidTestImplementation(libs.google.truth)
+    androidTestImplementation(libs.androidx.navigation.testing)
+    androidTestImplementation(libs.hilt.android.testing)
+    kspAndroidTest(libs.hilt.compiler)
+    kspAndroidTest(libs.kotlinx.metadata)
+    androidTestImplementation(libs.androidx.compose.ui.tooling.core)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.compose.ui.test.manifest)
+    androidTestImplementation(libs.androidx.test.core.ktx)
+    androidTestImplementation(libs.androidx.test.ext)
+    androidTestImplementation(libs.androidx.test.rules)
 
     // AndroidX Test - JVM testing
     testImplementation(libs.androidx.test.core.ktx)

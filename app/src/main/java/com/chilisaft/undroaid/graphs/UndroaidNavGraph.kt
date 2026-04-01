@@ -23,13 +23,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.chilisaft.undroaid.ui.array.ArrayScreen
+import com.chilisaft.undroaid.ui.main.MainScreen
 import com.chilisaft.undroaid.ui.dashboard.DashboardScreen
+import com.chilisaft.undroaid.ui.dashboard.DashboardViewModel
 import com.chilisaft.undroaid.ui.server.ServerScreen
 import com.chilisaft.undroaid.ui.shares.SharesScreen
 import com.chilisaft.undroaid.ui.virtualization.VirtualizationScreen
@@ -41,9 +43,9 @@ sealed class BottomNavDestination(val title: String, val route: String, val icon
         icon = Icons.Outlined.Dashboard,
         icon_selected = Icons.Filled.Dashboard
     )
-    data object Array : BottomNavDestination(
-        title = "Array",
-        route = "array",
+    data object Main : BottomNavDestination(
+        title = "Main",
+        route = "main",
         icon = Icons.Outlined.Storage,
         icon_selected = Icons.Filled.Storage
     )
@@ -70,11 +72,12 @@ sealed class BottomNavDestination(val title: String, val route: String, val icon
 @Composable
 fun UndroaidNavGraph(
     navController: NavHostController = rememberNavController(),
-    startDestination: String = BottomNavDestination.Dashboard.route
+    startDestination: String = BottomNavDestination.Dashboard.route,
+    dashboardViewModel: DashboardViewModel = hiltViewModel()
 ) {
     val bottomNavItem = listOf(
         BottomNavDestination.Dashboard,
-        BottomNavDestination.Array,
+        BottomNavDestination.Main,
         BottomNavDestination.Virtualization,
         BottomNavDestination.Shares,
         BottomNavDestination.Server
@@ -96,6 +99,7 @@ fun UndroaidNavGraph(
                             }
                         },
                         selected = index == selectedIndex,
+                        label = { androidx.compose.material3.Text(screen.title) },
                         onClick = {
                             selectedIndex = index
                             navController.navigate(screen.route) {
@@ -106,18 +110,12 @@ fun UndroaidNavGraph(
                                 launchSingleTop = true
                                 restoreState = true
                             }
-                        },
-//                        colors = NavigationBarItemDefaults.colors(
-//                            selectedIconColor = RickAction,
-//                            selectedTextColor = RickAction,
-//                            indicatorColor = Color.Transparent
-//                        )
+                        }
                     )
                 }
             }
         }
-    ) {
-        innerPadding ->
+    ) { innerPadding ->
         NavHost(
             navController = navController,
             startDestination = startDestination,
@@ -126,10 +124,10 @@ fun UndroaidNavGraph(
                 .padding(innerPadding)
         ) {
             composable(BottomNavDestination.Dashboard.route) {
-                DashboardScreen()
+                DashboardScreen(viewModel = dashboardViewModel)
             }
-            composable(BottomNavDestination.Array.route) {
-                ArrayScreen()
+            composable(BottomNavDestination.Main.route) {
+                MainScreen()
             }
             composable(BottomNavDestination.Shares.route) {
                 SharesScreen()

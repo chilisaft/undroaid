@@ -12,28 +12,25 @@ class LoginRepository @Inject constructor(
     private val storage: Storage
 ) {
     suspend fun login(login: Login): Result<Boolean> {
-        // Temporarily set credentials for the login attempt.
-        // The AuthInterceptor will use these.
-        storage.serverUrl = login.serverUrl
-        storage.apiToken = login.apiToken
+        val serverUrl = login.serverUrl?.trim() ?: ""
+        if (serverUrl.isBlank()) return Result.failure(Exception("Server URL cannot be empty"))
 
         return try {
-            val response = apolloClient.query(TestLoginQuery()).execute()
+            val response = apolloClient.query(TestLoginQuery())
+                .addHttpHeader("X-Server-Url", serverUrl)
+                .addHttpHeader("X-API-KEY-OVERRIDE", login.apiToken?.trim() ?: "")
+                .execute()
 
             if (response.data?.server != null && !response.hasErrors()) {
-                // Login successful, credentials are valid and now stored.
+                // Login successful, save credentials
+                storage.serverUrl = login.serverUrl
+                storage.apiToken = login.apiToken
                 Result.success(true)
             } else {
-                // Clear credentials if login failed
-                storage.serverUrl = ""
-                storage.apiToken = ""
                 val errorMessage = response.errors?.joinToString { it.message } ?: "Login failed"
                 Result.failure(Exception(errorMessage))
             }
         } catch (e: ApolloException) {
-            // Clear credentials if login failed due to a network or parsing error
-            storage.serverUrl = ""
-            storage.apiToken = ""
             Result.failure(e)
         }
     }

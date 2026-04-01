@@ -15,23 +15,22 @@ object GraphQlServiceModule {
 
     @Provides
     @Singleton
-    fun provideOkHttpClient(urlRewriteInterceptor: UrlRewriteInterceptor): OkHttpClient {
+    fun provideOkHttpClient(
+        unraidInterceptor: UnraidInterceptor
+    ): OkHttpClient {
         return OkHttpClient.Builder()
-            .addInterceptor(urlRewriteInterceptor)
+            .addInterceptor(unraidInterceptor)
             .build()
     }
 
     @Provides
     @Singleton
     fun provideApolloClient(
-        authInterceptor: AuthInterceptor,
         okHttpClient: OkHttpClient
     ): ApolloClient {
         return ApolloClient.Builder()
-            // This placeholder URL will be replaced by the UrlRewriteInterceptor
-            .serverUrl("http://placeholder/graphql")
+            .serverUrl("https://placeholder.local/graphql")
             .okHttpClient(okHttpClient)
-            .addHttpInterceptor(authInterceptor)
             .build()
     }
 }

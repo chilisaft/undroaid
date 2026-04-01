@@ -1,29 +1,26 @@
 package com.chilisaft.undroaid.ui.theme
 
 import androidx.compose.material3.Typography
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
-
-import androidx.compose.ui.text.googlefonts.GoogleFont
-import androidx.compose.ui.text.googlefonts.Font
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontVariation
+import androidx.compose.ui.text.font.FontWeight
 import com.chilisaft.undroaid.R
 
-val provider = GoogleFont.Provider(
-    providerAuthority = "com.google.android.gms.fonts",
-    providerPackage = "com.google.android.gms",
-    certificates = R.array.com_google_android_gms_fonts_certs
+// Chakra Petch for titles, headers, and primary labels
+val chakraPetchFontFamily = FontFamily(
+    Font(R.font.chakrapetch_regular, FontWeight.Normal),
+    Font(R.font.chakrapetch_italic, FontWeight.Normal, FontStyle.Italic),
+    Font(R.font.chakrapetch_medium, FontWeight.Medium),
+    Font(R.font.chakrapetch_semibold, FontWeight.SemiBold),
+    Font(R.font.chakrapetch_bold, FontWeight.Bold)
 )
 
-val bodyFontFamily = FontFamily(
+// Inter Variable for descriptive text, body, and UI labels
+val interFontFamily = FontFamily(
     Font(
-        googleFont = GoogleFont("Chakra Petch"),
-        fontProvider = provider,
-    )
-)
-
-val displayFontFamily = FontFamily(
-    Font(
-        googleFont = GoogleFont("Share Tech"),
-        fontProvider = provider,
+        resId = R.font.inter_variable,
     )
 )
 
@@ -31,20 +28,22 @@ val displayFontFamily = FontFamily(
 val baseline = Typography()
 
 val AppTypography = Typography(
-    displayLarge = baseline.displayLarge.copy(fontFamily = displayFontFamily),
-    displayMedium = baseline.displayMedium.copy(fontFamily = displayFontFamily),
-    displaySmall = baseline.displaySmall.copy(fontFamily = displayFontFamily),
-    headlineLarge = baseline.headlineLarge.copy(fontFamily = displayFontFamily),
-    headlineMedium = baseline.headlineMedium.copy(fontFamily = displayFontFamily),
-    headlineSmall = baseline.headlineSmall.copy(fontFamily = displayFontFamily),
-    titleLarge = baseline.titleLarge.copy(fontFamily = displayFontFamily),
-    titleMedium = baseline.titleMedium.copy(fontFamily = displayFontFamily),
-    titleSmall = baseline.titleSmall.copy(fontFamily = displayFontFamily),
-    bodyLarge = baseline.bodyLarge.copy(fontFamily = bodyFontFamily),
-    bodyMedium = baseline.bodyMedium.copy(fontFamily = bodyFontFamily),
-    bodySmall = baseline.bodySmall.copy(fontFamily = bodyFontFamily),
-    labelLarge = baseline.labelLarge.copy(fontFamily = bodyFontFamily),
-    labelMedium = baseline.labelMedium.copy(fontFamily = bodyFontFamily),
-    labelSmall = baseline.labelSmall.copy(fontFamily = bodyFontFamily),
-)
+    // Display, Headline, and Title use Chakra Petch (High emphasis branding)
+    displayLarge = baseline.displayLarge.copy(fontFamily = chakraPetchFontFamily),
+    displayMedium = baseline.displayMedium.copy(fontFamily = chakraPetchFontFamily),
+    displaySmall = baseline.displaySmall.copy(fontFamily = chakraPetchFontFamily),
+    headlineLarge = baseline.headlineLarge.copy(fontFamily = chakraPetchFontFamily),
+    headlineMedium = baseline.headlineMedium.copy(fontFamily = chakraPetchFontFamily),
+    headlineSmall = baseline.headlineSmall.copy(fontFamily = chakraPetchFontFamily),
+    titleLarge = baseline.titleLarge.copy(fontFamily = chakraPetchFontFamily),
+    titleMedium = baseline.titleMedium.copy(fontFamily = chakraPetchFontFamily),
+    titleSmall = baseline.titleSmall.copy(fontFamily = chakraPetchFontFamily),
 
+    // Body and Labels use Inter (Readability for descriptions)
+    bodyLarge = baseline.bodyLarge.copy(fontFamily = interFontFamily),
+    bodyMedium = baseline.bodyMedium.copy(fontFamily = interFontFamily),
+    bodySmall = baseline.bodySmall.copy(fontFamily = interFontFamily),
+    labelLarge = baseline.labelLarge.copy(fontFamily = interFontFamily),
+    labelMedium = baseline.labelMedium.copy(fontFamily = interFontFamily),
+    labelSmall = baseline.labelSmall.copy(fontFamily = interFontFamily),
+)

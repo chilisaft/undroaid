@@ -1,13 +1,15 @@
 package com.chilisaft.undroaid.ui.dashboard
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.chilisaft.undroaid.data.models.Server
 import com.chilisaft.undroaid.data.repository.ServerRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 
@@ -26,18 +28,29 @@ class DashboardViewModel @Inject constructor(
     val uiState: StateFlow<DashboardScreenState> = _uiState.asStateFlow()
 
     init {
-        var serverInformation: Result<Server>
-        runBlocking {
-            serverInformation = serverRepository.getServerInformation()
-        }
+        loadServerInformation()
+    }
 
-        if (serverInformation.isFailure) {
-            // TODO: show error
-        } else {
-            _uiState.value = _uiState.value.copy(
-                server = serverInformation.getOrThrow(),
-                isLoading = false
-            )
+    private fun loadServerInformation() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true) }
+            val serverInformationResult = serverRepository.getServerInformation()
+            serverInformationResult.onSuccess { server ->
+                _uiState.update {
+                    it.copy(
+                        server = server,
+                        isLoading = false,
+                        error = null
+                    )
+                }
+            }.onFailure { throwable ->
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        error = throwable.message
+                    )
+                }
+            }
         }
     }
 }

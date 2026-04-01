@@ -4,9 +4,13 @@ import com.apollographql.apollo.ApolloClient
 import com.chilisaft.undroaid.graphql.ServerInformationQuery
 import com.chilisaft.undroaid.data.models.Owner
 import com.chilisaft.undroaid.data.models.Server
+import com.chilisaft.undroaid.utils.Storage
 import javax.inject.Inject
 
-class ServerRepository @Inject constructor(private val apolloClient: ApolloClient) {
+class ServerRepository @Inject constructor(
+    private val apolloClient: ApolloClient,
+    private val storage: Storage
+) {
 
     suspend fun getServerInformation(): Result<Server> {
         return try {
@@ -16,7 +20,6 @@ class ServerRepository @Inject constructor(private val apolloClient: ApolloClien
                     Result.success(
                         Server(
                             owner = Owner(
-                                userId = serverData.owner.userId,
                                 username = serverData.owner.username,
                                 url = serverData.owner.url,
                                 avatar = serverData.owner.avatar
