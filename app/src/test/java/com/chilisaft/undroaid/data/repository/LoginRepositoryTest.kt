@@ -74,7 +74,8 @@ class LoginRepositoryTest {
         val result = repository.login(login)
 
         assertThat(result.isFailure).isTrue()
-        verify { storage.serverUrl = "" }
-        verify { storage.apiToken = "" }
+        // Credentials are only persisted on success; a failed attempt must leave storage untouched.
+        verify(exactly = 0) { storage.serverUrl = any() }
+        verify(exactly = 0) { storage.apiToken = any() }
     }
 }

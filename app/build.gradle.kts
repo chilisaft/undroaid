@@ -14,13 +14,13 @@ allOpen {
     annotation("dagger.hilt.android.lifecycle.HiltViewModel")
     annotation("dagger.Module")
     annotation("dagger.hilt.InstallIn")
-    annotation("jakarta.inject.Singleton")
-    annotation("jakarta.inject.Inject")
+    annotation("javax.inject.Singleton")
+    annotation("javax.inject.Inject")
 }
 
 extensions.configure<ApplicationExtension> {
     namespace = "com.chilisaft.undroaid"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.chilisaft.undroaid"
@@ -82,9 +82,10 @@ dependencies {
     implementation(libs.androidx.hilt.navigation.compose)
     implementation(libs.androidx.preference.ktx)
     implementation(libs.androidx.ui.text.google.fonts)
-    implementation(libs.androidx.runtime)
     ksp(libs.hilt.compiler)
-    ksp(libs.kotlinx.metadata)
+    // Hilt's aggregating javac step bundles its own kotlin-metadata-jvm reader, which lags
+    // behind the Kotlin compiler's metadata format; pin a matching version or Hilt fails to parse it.
+    ksp(libs.kotlin.metadata.jvm)
 
     // Jetpack Compose
     val composeBom = platform(libs.androidx.compose.bom)
@@ -118,7 +119,7 @@ dependencies {
     // JVM tests - Hilt
     testImplementation(libs.hilt.android.testing)
     kspTest(libs.hilt.compiler)
-    kspTest(libs.kotlinx.metadata)
+    kspTest(libs.kotlin.metadata.jvm)
 
     // Dependencies for Android unit tests
     androidTestImplementation(composeBom)
@@ -130,7 +131,7 @@ dependencies {
     androidTestImplementation(libs.androidx.navigation.testing)
     androidTestImplementation(libs.hilt.android.testing)
     kspAndroidTest(libs.hilt.compiler)
-    kspAndroidTest(libs.kotlinx.metadata)
+    kspAndroidTest(libs.kotlin.metadata.jvm)
     androidTestImplementation(libs.androidx.compose.ui.tooling.core)
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.androidx.compose.ui.test.manifest)
@@ -145,7 +146,6 @@ dependencies {
 
     implementation(libs.androidx.security.crypto)
     implementation(libs.apollo.runtime)
-    implementation(libs.timber)
 }
 
 apollo {
