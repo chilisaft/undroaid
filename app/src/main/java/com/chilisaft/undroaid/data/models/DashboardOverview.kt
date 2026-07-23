@@ -21,5 +21,6 @@ data class MetricsSample(
 
 data class DockerContainerSummary(
     val name: String,
-    val isRunning: Boolean
+    val isRunning: Boolean,
+    val iconUrl: String?
 )

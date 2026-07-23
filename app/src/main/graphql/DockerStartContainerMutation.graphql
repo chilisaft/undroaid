@@ -1,0 +1,7 @@
+mutation DockerStartContainerMutation($id: PrefixedID!) {
+    docker {
+        start(id: $id) {
+            id
+        }
+    }
+}

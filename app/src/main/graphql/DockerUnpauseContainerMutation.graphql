@@ -1,0 +1,7 @@
+mutation DockerUnpauseContainerMutation($id: PrefixedID!) {
+    docker {
+        unpause(id: $id) {
+            id
+        }
+    }
+}

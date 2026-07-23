@@ -27,6 +27,7 @@ import com.chilisaft.undroaid.data.models.ArrayStatus
 import com.chilisaft.undroaid.data.models.DockerContainerSummary
 import com.chilisaft.undroaid.data.models.SystemMetrics
 import com.chilisaft.undroaid.data.models.WidgetResult
+import com.chilisaft.undroaid.ui.components.ContainerIconBadge
 import com.chilisaft.undroaid.ui.components.WidgetSection
 import com.chilisaft.undroaid.ui.theme.AppTheme
 import com.chilisaft.undroaid.ui.theme.spacing
@@ -247,7 +248,7 @@ private fun DockerCard(containers: List<DockerContainerSummary>, onShowAll: () -
         } else {
             Column(modifier = Modifier.padding(vertical = spacing.small)) {
                 containers.take(MAX_VISIBLE_CONTAINERS).forEach { container ->
-                    DockerRow(container.name, container.isRunning)
+                    DockerRow(container.name, container.isRunning, container.iconUrl)
                 }
                 if (containers.size > MAX_VISIBLE_CONTAINERS) {
                     TextButton(onClick = onShowAll, modifier = Modifier.fillMaxWidth()) {
@@ -316,7 +317,7 @@ fun SectionHeader(title: String, modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun DockerRow(name: String, isRunning: Boolean) {
+fun DockerRow(name: String, isRunning: Boolean, iconUrl: String? = null) {
     val spacing = MaterialTheme.spacing
     Row(
         modifier = Modifier
@@ -326,20 +327,7 @@ fun DockerRow(name: String, isRunning: Boolean) {
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Surface(
-                modifier = Modifier.size(40.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        Icons.Filled.Layers,
-                        contentDescription = null,
-                        tint = if (isRunning) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-            }
+            ContainerIconBadge(iconUrl = iconUrl, isRunning = isRunning)
             Spacer(Modifier.width(spacing.medium))
             Column {
                 Text(name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
@@ -379,10 +367,10 @@ private val previewSystemMetrics = SystemMetrics(
 )
 
 private val previewContainers = listOf(
-    DockerContainerSummary("Plex Media Server", isRunning = true),
-    DockerContainerSummary("Nextcloud", isRunning = true),
-    DockerContainerSummary("Home Assistant", isRunning = false),
-    DockerContainerSummary("Pi-hole", isRunning = true)
+    DockerContainerSummary("Plex Media Server", isRunning = true, iconUrl = null),
+    DockerContainerSummary("Nextcloud", isRunning = true, iconUrl = null),
+    DockerContainerSummary("Home Assistant", isRunning = false, iconUrl = null),
+    DockerContainerSummary("Pi-hole", isRunning = true, iconUrl = null)
 )
 
 @Preview(name = "Light Mode", showBackground = true)

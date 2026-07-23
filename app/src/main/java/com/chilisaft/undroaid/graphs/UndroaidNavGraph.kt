@@ -48,12 +48,12 @@ import androidx.navigation.compose.rememberNavController
 import com.chilisaft.undroaid.ui.main.MainScreen
 import com.chilisaft.undroaid.ui.dashboard.DashboardScreen
 import com.chilisaft.undroaid.ui.dashboard.DashboardViewModel
+import com.chilisaft.undroaid.ui.docker.DockerScreen
 import com.chilisaft.undroaid.ui.notifications.NotificationsScreen
 import com.chilisaft.undroaid.ui.server.ServerScreen
 import com.chilisaft.undroaid.ui.settings.SettingsScreen
 import com.chilisaft.undroaid.ui.shares.SharesScreen
 import com.chilisaft.undroaid.ui.theme.spacing
-import com.chilisaft.undroaid.ui.virtualization.VirtualizationScreen
 import com.chilisaft.undroaid.ui.vms.VmsScreen
 
 private const val SETTINGS_ROUTE = "settings"
@@ -79,9 +79,9 @@ sealed class BottomNavDestination(val title: String, val route: String, val icon
         icon = Icons.Outlined.Storage,
         icon_selected = Icons.Filled.Storage
     )
-    data object Virtualization : BottomNavDestination(
-        title = "Apps",
-        route = "virtualization",
+    data object Docker : BottomNavDestination(
+        title = "Docker",
+        route = "docker",
         icon = Icons.Outlined.SmartToy,
         icon_selected = Icons.Filled.SmartToy
     )
@@ -104,12 +104,12 @@ fun UndroaidNavGraph(
     val bottomNavItem = listOf(
         BottomNavDestination.Dashboard,
         BottomNavDestination.Main,
-        BottomNavDestination.Virtualization,
+        BottomNavDestination.Docker,
         BottomNavDestination.Vms
     )
     // Derived from the back stack (rather than separate local state) so the highlighted tab
     // stays correct when navigation happens outside the bottom bar, e.g. Dashboard's
-    // "Show all" docker button jumping straight to the Virtualization tab.
+    // "Show all" docker button jumping straight to the Docker tab.
     val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
     val selectedIndex = bottomNavItem.indexOfFirst { it.route == currentRoute }
 
@@ -170,7 +170,7 @@ fun UndroaidNavGraph(
                     viewModel = dashboardViewModel,
                     onNotificationsClick = { navController.navigate(NOTIFICATIONS_ROUTE) },
                     onShowAllContainers = {
-                        navController.navigate(BottomNavDestination.Virtualization.route) {
+                        navController.navigate(BottomNavDestination.Docker.route) {
                             popUpTo(navController.graph.findStartDestination().id) {
                                 saveState = true
                             }
@@ -183,8 +183,8 @@ fun UndroaidNavGraph(
             composable(BottomNavDestination.Main.route) {
                 MainScreen()
             }
-            composable(BottomNavDestination.Virtualization.route) {
-                VirtualizationScreen()
+            composable(BottomNavDestination.Docker.route) {
+                DockerScreen()
             }
             composable(BottomNavDestination.Vms.route) {
                 VmsScreen()

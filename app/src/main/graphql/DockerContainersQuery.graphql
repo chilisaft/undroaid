@@ -1,9 +1,13 @@
-query DockerStatusQuery {
+query DockerContainersQuery {
     docker {
         containers {
+            id
             names
+            image
             state
+            status
             iconUrl
+            webUiUrl
         }
     }
 }

@@ -84,7 +84,8 @@ class ServerRepository @Inject constructor(
 
     private fun DockerStatusQuery.Container.toDockerContainerSummary() = DockerContainerSummary(
         name = names.firstOrNull()?.removePrefix("/") ?: "Unknown",
-        isRunning = state == ContainerState.RUNNING
+        isRunning = state == ContainerState.RUNNING,
+        iconUrl = iconUrl
     )
 
     private fun ArrayState.toLabel(): String = when (this) {

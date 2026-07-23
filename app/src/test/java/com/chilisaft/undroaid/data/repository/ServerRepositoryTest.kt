@@ -161,14 +161,14 @@ class ServerRepositoryTest {
     }
 
     @Test
-    fun `getDockerContainers strips the leading slash from container names`() = runBlocking {
+    fun `getDockerContainers strips the leading slash from container names and maps the icon url`() = runBlocking {
         val json = """
         {
           "data": {
             "docker": {
               "containers": [
-                { "names": ["/Plex-Media-Server"], "state": "RUNNING" },
-                { "names": ["/Home-Assistant"], "state": "EXITED" }
+                { "names": ["/Plex-Media-Server"], "state": "RUNNING", "iconUrl": "https://example.com/plex.png" },
+                { "names": ["/Home-Assistant"], "state": "EXITED", "iconUrl": null }
               ]
             }
           }
@@ -182,8 +182,10 @@ class ServerRepositoryTest {
         assertThat(containers).hasSize(2)
         assertThat(containers[0].name).isEqualTo("Plex-Media-Server")
         assertThat(containers[0].isRunning).isTrue()
+        assertThat(containers[0].iconUrl).isEqualTo("https://example.com/plex.png")
         assertThat(containers[1].name).isEqualTo("Home-Assistant")
         assertThat(containers[1].isRunning).isFalse()
+        assertThat(containers[1].iconUrl).isNull()
     }
 
     @Test
