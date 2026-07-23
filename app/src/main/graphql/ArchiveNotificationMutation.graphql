@@ -1,0 +1,5 @@
+mutation ArchiveNotificationMutation($id: PrefixedID!) {
+    archiveNotification(id: $id) {
+        id
+    }
+}

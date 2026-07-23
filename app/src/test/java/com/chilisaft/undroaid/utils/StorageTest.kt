@@ -1,7 +1,7 @@
 package com.chilisaft.undroaid.utils
 
 import android.content.SharedPreferences
-import androidx.appcompat.app.AppCompatDelegate
+import com.chilisaft.undroaid.data.models.ThemeMode
 import com.google.common.truth.Truth.assertThat
 import io.mockk.every
 import io.mockk.mockk
@@ -61,13 +61,24 @@ class StorageTest {
     }
 
     @Test
-    fun `theme is stored in default preferences`() {
-        val theme = AppCompatDelegate.MODE_NIGHT_YES
-        storage.theme = theme
-        verify { defaultEditor.putInt("theme", theme) }
+    fun `themeMode is stored in default preferences`() {
+        storage.themeMode = ThemeMode.DARK
+        verify { defaultEditor.putString("theme_mode", "DARK") }
 
-        every { defaultPrefs.getInt("theme", AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM) } returns theme
-        assertThat(storage.theme).isEqualTo(theme)
+        every { defaultPrefs.getString("theme_mode", null) } returns "DARK"
+        assertThat(storage.themeMode).isEqualTo(ThemeMode.DARK)
+    }
+
+    @Test
+    fun `themeMode defaults to SYSTEM when nothing is stored`() {
+        every { defaultPrefs.getString("theme_mode", null) } returns null
+        assertThat(storage.themeMode).isEqualTo(ThemeMode.SYSTEM)
+    }
+
+    @Test
+    fun `themeMode defaults to SYSTEM for an unrecognized stored value`() {
+        every { defaultPrefs.getString("theme_mode", null) } returns "not-a-real-mode"
+        assertThat(storage.themeMode).isEqualTo(ThemeMode.SYSTEM)
     }
 
     @Test
@@ -77,6 +88,15 @@ class StorageTest {
 
         every { defaultPrefs.getBoolean("show_core_list", false) } returns true
         assertThat(storage.showCoreList).isTrue()
+    }
+
+    @Test
+    fun `useDynamicColor is stored in default preferences and defaults to true`() {
+        storage.useDynamicColor = false
+        verify { defaultEditor.putBoolean("use_dynamic_color", false) }
+
+        every { defaultPrefs.getBoolean("use_dynamic_color", true) } returns false
+        assertThat(storage.useDynamicColor).isFalse()
     }
 
     @Test

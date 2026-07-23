@@ -12,8 +12,6 @@ plugins {
 
 allOpen {
     annotation("dagger.hilt.android.lifecycle.HiltViewModel")
-    annotation("dagger.Module")
-    annotation("dagger.hilt.InstallIn")
     annotation("javax.inject.Singleton")
     annotation("javax.inject.Inject")
 }
@@ -151,5 +149,6 @@ dependencies {
 apollo {
     service("service") {
         packageName.set("com.chilisaft.undroaid.graphql")
+        mapScalar("PrefixedID", "kotlin.String")
     }
 }

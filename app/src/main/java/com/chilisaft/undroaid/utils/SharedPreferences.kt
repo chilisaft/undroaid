@@ -28,12 +28,14 @@ annotation class EncryptedPreferences
 object SharedPreferences {
 
     @Provides
+    @Singleton
     @DefaultPreferences
     fun provideDefaultSharedPreferences(@ApplicationContext context: Context): SharedPreferences {
         return PreferenceManager.getDefaultSharedPreferences(context)
     }
 
     @Provides
+    @Singleton
     @EncryptedPreferences
     fun provideEncryptedSharedPreferences(@ApplicationContext context: Context): SharedPreferences {
         // This is the correct, non-deprecated method for creating EncryptedSharedPreferences.

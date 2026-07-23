@@ -9,8 +9,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -21,18 +23,45 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import com.chilisaft.undroaid.data.models.ArrayStatus
+import com.chilisaft.undroaid.data.models.DockerContainerSummary
+import com.chilisaft.undroaid.data.models.SystemMetrics
+import com.chilisaft.undroaid.data.models.WidgetResult
+import com.chilisaft.undroaid.ui.components.WidgetSection
 import com.chilisaft.undroaid.ui.theme.AppTheme
 import com.chilisaft.undroaid.ui.theme.spacing
+import com.chilisaft.undroaid.utils.kilobytesToHumanReadable
+import com.chilisaft.undroaid.utils.toUptimeLabel
+import java.time.Instant
+import kotlinx.coroutines.delay
 
 @Composable
-fun DashboardScreen(viewModel: DashboardViewModel = hiltViewModel()) {
+fun DashboardScreen(
+    viewModel: DashboardViewModel = hiltViewModel(),
+    onNotificationsClick: () -> Unit = {},
+    onShowAllContainers: () -> Unit = {}
+) {
     val uiState by viewModel.uiState.collectAsState()
-    DashboardScreenContent(uiState = uiState)
+    DashboardScreenContent(
+        uiState = uiState,
+        onNotificationsClick = onNotificationsClick,
+        onShowAllContainers = onShowAllContainers,
+        onRetryArrayStatus = viewModel::refreshArrayStatus,
+        onRetrySystemMetrics = viewModel::refreshSystemMetrics,
+        onRetryContainers = viewModel::refreshContainers
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DashboardScreenContent(uiState: DashboardScreenState) {
+fun DashboardScreenContent(
+    uiState: DashboardScreenState,
+    onNotificationsClick: () -> Unit = {},
+    onShowAllContainers: () -> Unit = {},
+    onRetryArrayStatus: () -> Unit = {},
+    onRetrySystemMetrics: () -> Unit = {},
+    onRetryContainers: () -> Unit = {}
+) {
     val spacing = MaterialTheme.spacing
     Scaffold(
         topBar = {
@@ -47,7 +76,7 @@ fun DashboardScreenContent(uiState: DashboardScreenState) {
                         )
                         Spacer(Modifier.width(spacing.small))
                         Text(
-                            text = uiState.server?.name ?: "Tower Command",
+                            text = uiState.serverName ?: "Tower Command",
                             style = MaterialTheme.typography.titleLarge.copy(
                                 fontWeight = FontWeight.Black,
                                 letterSpacing = (-0.5).sp
@@ -56,8 +85,15 @@ fun DashboardScreenContent(uiState: DashboardScreenState) {
                     }
                 },
                 actions = {
-                    IconButton(onClick = { /* TODO */ }) {
-                        Icon(Icons.Filled.Settings, contentDescription = "Settings")
+                    val unreadCount = (uiState.unreadNotificationCount as? WidgetResult.Success)?.data ?: 0
+                    IconButton(onClick = onNotificationsClick) {
+                        BadgedBox(badge = {
+                            if (unreadCount > 0) {
+                                Badge { Text(if (unreadCount > 99) "99+" else unreadCount.toString()) }
+                            }
+                        }) {
+                            Icon(Icons.Filled.Notifications, contentDescription = "Notifications")
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -75,80 +111,26 @@ fun DashboardScreenContent(uiState: DashboardScreenState) {
         ) {
 
             item {
-                ArrayStatusCard(
-                    status = "Array Started",
-                    uptime = "42d 12h 04m",
-                    storage = "124.5 TB"
-                )
+                // Boot time only changes on a reboot, so recompute the elapsed label
+                // independently of the systemMetrics widget's own load/poll cadence.
+                val now by rememberTickingNow()
+                val uptimeLabel = (uiState.systemMetrics as? WidgetResult.Success)?.data?.bootTimeIso?.toUptimeLabel(now)
+                WidgetSection(result = uiState.arrayStatus, onRetry = onRetryArrayStatus, minHeight = 140.dp) { status ->
+                    ArrayStatusCard(status = status, uptimeLabel = uptimeLabel)
+                }
             }
 
-            // Metrics Grid
             item {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(spacing.itemSpacing)) {
-                    MetricCard(
-                        modifier = Modifier.weight(1f),
-                        label = "CPU LOAD",
-                        value = "24",
-                        unit = "%",
-                        progress = 0.24f,
-                        icon = Icons.Filled.Memory,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    MetricCard(
-                        modifier = Modifier.weight(1f),
-                        label = "MEMORY",
-                        value = "58",
-                        unit = "%",
-                        progress = 0.58f,
-                        icon = Icons.Filled.Reorder,
-                        color = MaterialTheme.colorScheme.secondary
-                    )
+                WidgetSection(result = uiState.systemMetrics, onRetry = onRetrySystemMetrics, minHeight = 110.dp) { metrics ->
+                    SystemMetricsRow(metrics)
                 }
             }
 
             item {
                 SectionHeader(title = "Docker")
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-                    shape = RoundedCornerShape(spacing.mediumLarge)
-                ) {
-                    Column(modifier = Modifier.padding(vertical = spacing.small)) {
-                        DockerRow("Plex Media Server", isRunning = true, Icons.Filled.Layers)
-                        DockerRow("Nextcloud", isRunning = true, Icons.Filled.Backup)
-                        DockerRow("Home Assistant", isRunning = false, Icons.Filled.Lan)
-                    }
+                WidgetSection(result = uiState.containers, onRetry = onRetryContainers, minHeight = 80.dp) { containers ->
+                    DockerCard(containers = containers, onShowAll = onShowAllContainers)
                 }
-            }
-
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    SectionHeader(title = "Activity")
-                    TextButton(onClick = { /* TODO */ }) {
-                        Text("DISMISS ALL", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-                    }
-                }
-                NotificationItem(
-                    title = "Parity Check Complete",
-                    desc = "System finished scheduled parity check. Duration: 14h 22m. Errors found: 0.",
-                    time = "2 HOURS AGO",
-                    icon = Icons.Filled.TaskAlt,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-
-            item {
-                NotificationItem(
-                    title = "Disk 4 Temperature Alert",
-                    desc = "WDC_WD120EDAZ has reached 46°C. Cooling threshold exceeded.",
-                    time = "5 HOURS AGO",
-                    icon = Icons.Filled.Warning,
-                    color = MaterialTheme.colorScheme.error
-                )
             }
 
             item { Spacer(Modifier.height(spacing.extraLarge)) }
@@ -157,7 +139,7 @@ fun DashboardScreenContent(uiState: DashboardScreenState) {
 }
 
 @Composable
-fun ArrayStatusCard(status: String, uptime: String, storage: String) {
+fun ArrayStatusCard(status: ArrayStatus, uptimeLabel: String?) {
     val spacing = MaterialTheme.spacing
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -184,7 +166,7 @@ fun ArrayStatusCard(status: String, uptime: String, storage: String) {
                 ) {
                     Column {
                         Text("ARRAY STATUS", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f), fontWeight = FontWeight.Bold)
-                        Text(status, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Black)
+                        Text(status.statusLabel, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Black)
                     }
                     Surface(
                         color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.15f),
@@ -193,24 +175,99 @@ fun ArrayStatusCard(status: String, uptime: String, storage: String) {
                         Row(modifier = Modifier.padding(horizontal = spacing.small, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                             Box(modifier = Modifier.size(6.dp).background(MaterialTheme.colorScheme.onPrimary, RoundedCornerShape(50)))
                             Spacer(Modifier.width(spacing.extraSmall))
-                            Text("HEALTH: OK", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold)
+                            Text(
+                                if (status.healthy) "HEALTH: OK" else "HEALTH: ISSUE",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                fontWeight = FontWeight.Bold
+                            )
                         }
                     }
                 }
                 Spacer(Modifier.height(spacing.small))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    InfoColumn("UPTIME", uptime)
+                    InfoColumn("UPTIME", uptimeLabel ?: "—")
                     Box(modifier = Modifier.width(1.dp).height(spacing.extraLarge).background(MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.2f)))
-                    InfoColumn("TOTAL STORAGE", storage)
+                    InfoColumn("STORAGE USED", formatStorage(status.usedKb, status.totalKb))
                 }
             }
         }
     }
 }
 
+/** A [State] holding the current time, refreshed every [intervalMillis] while composed. */
 @Composable
-fun MetricCard(modifier: Modifier, label: String, value: String, unit: String, progress: Float, icon: ImageVector, color: Color) {
+private fun rememberTickingNow(intervalMillis: Long = 30_000): State<Instant> {
+    return produceState(initialValue = Instant.now()) {
+        while (true) {
+            delay(intervalMillis)
+            value = Instant.now()
+        }
+    }
+}
+
+@Composable
+private fun SystemMetricsRow(metrics: SystemMetrics) {
     val spacing = MaterialTheme.spacing
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(spacing.itemSpacing)) {
+        MetricCard(
+            modifier = Modifier.weight(1f),
+            label = "CPU LOAD",
+            percent = metrics.cpuLoadPercent,
+            icon = Icons.Filled.Memory,
+            color = MaterialTheme.colorScheme.primary
+        )
+        MetricCard(
+            modifier = Modifier.weight(1f),
+            label = "MEMORY",
+            percent = metrics.memoryLoadPercent,
+            icon = Icons.Filled.Reorder,
+            color = MaterialTheme.colorScheme.secondary
+        )
+    }
+}
+
+private const val MAX_VISIBLE_CONTAINERS = 3
+
+@Composable
+private fun DockerCard(containers: List<DockerContainerSummary>, onShowAll: () -> Unit) {
+    val spacing = MaterialTheme.spacing
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        shape = RoundedCornerShape(spacing.mediumLarge)
+    ) {
+        if (containers.isEmpty()) {
+            Text(
+                text = "No containers configured",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(spacing.medium)
+            )
+        } else {
+            Column(modifier = Modifier.padding(vertical = spacing.small)) {
+                containers.take(MAX_VISIBLE_CONTAINERS).forEach { container ->
+                    DockerRow(container.name, container.isRunning)
+                }
+                if (containers.size > MAX_VISIBLE_CONTAINERS) {
+                    TextButton(onClick = onShowAll, modifier = Modifier.fillMaxWidth()) {
+                        Text("SHOW ALL (${containers.size})", style = MaterialTheme.typography.labelLarge)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun formatStorage(usedKb: Long?, totalKb: Long?): String {
+    if (usedKb == null || totalKb == null) return "—"
+    return "${usedKb.kilobytesToHumanReadable()} / ${totalKb.kilobytesToHumanReadable()}"
+}
+
+@Composable
+fun MetricCard(modifier: Modifier, label: String, percent: Double?, icon: ImageVector, color: Color) {
+    val spacing = MaterialTheme.spacing
+    val roundedPercent = percent?.let { Math.round(it).toInt() }
     Card(
         modifier = modifier,
         shape = RoundedCornerShape(spacing.mediumLarge),
@@ -223,12 +280,14 @@ fun MetricCard(modifier: Modifier, label: String, value: String, unit: String, p
             }
             Spacer(Modifier.height(spacing.small))
             Row(verticalAlignment = Alignment.Bottom) {
-                Text(value, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Black)
-                Text(unit, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(bottom = 6.dp, start = 4.dp))
+                Text(roundedPercent?.toString() ?: "—", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Black)
+                if (roundedPercent != null) {
+                    Text("%", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(bottom = 6.dp, start = 4.dp))
+                }
             }
             Spacer(Modifier.height(spacing.itemSpacing))
             LinearProgressIndicator(
-                progress = { progress },
+                progress = { (roundedPercent ?: 0) / 100f },
                 modifier = Modifier.fillMaxWidth().height(spacing.itemSpacing),
                 color = color,
                 trackColor = color.copy(alpha = 0.2f),
@@ -257,7 +316,7 @@ fun SectionHeader(title: String, modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun DockerRow(name: String, isRunning: Boolean, icon: ImageVector) {
+fun DockerRow(name: String, isRunning: Boolean) {
     val spacing = MaterialTheme.spacing
     Row(
         modifier = Modifier
@@ -274,7 +333,7 @@ fun DockerRow(name: String, isRunning: Boolean, icon: ImageVector) {
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
-                        icon,
+                        Icons.Filled.Layers,
                         contentDescription = null,
                         tint = if (isRunning) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                         modifier = Modifier.size(20.dp)
@@ -306,32 +365,62 @@ fun DockerRow(name: String, isRunning: Boolean, icon: ImageVector) {
     }
 }
 
-@Composable
-fun NotificationItem(title: String, desc: String, time: String, icon: ImageVector, color: Color) {
-    val spacing = MaterialTheme.spacing
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(spacing.mediumLarge),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
-    ) {
-        Row(modifier = Modifier.padding(spacing.medium)) {
-            Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(20.dp))
-            Spacer(Modifier.width(spacing.medium))
-            Column {
-                Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                Text(desc, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 18.sp)
-                Spacer(Modifier.height(spacing.small))
-                Text(time, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
-            }
-        }
-    }
-}
+private val previewArrayStatus = ArrayStatus(
+    statusLabel = "Array Started",
+    healthy = true,
+    usedKb = 130_589_261_824L / 1024,
+    totalKb = 268_435_456_000L / 1024
+)
+
+private val previewSystemMetrics = SystemMetrics(
+    bootTimeIso = "2024-01-01T00:00:00Z",
+    cpuLoadPercent = 24.0,
+    memoryLoadPercent = 58.0
+)
+
+private val previewContainers = listOf(
+    DockerContainerSummary("Plex Media Server", isRunning = true),
+    DockerContainerSummary("Nextcloud", isRunning = true),
+    DockerContainerSummary("Home Assistant", isRunning = false),
+    DockerContainerSummary("Pi-hole", isRunning = true)
+)
 
 @Preview(name = "Light Mode", showBackground = true)
 @Preview(name = "Dark Mode", showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
 @Composable
 fun DashboardPreview() {
     AppTheme {
+        DashboardScreenContent(
+            uiState = DashboardScreenState(
+                serverName = "TOWER",
+                arrayStatus = WidgetResult.Success(previewArrayStatus),
+                systemMetrics = WidgetResult.Success(previewSystemMetrics),
+                containers = WidgetResult.Success(previewContainers),
+                unreadNotificationCount = WidgetResult.Success(3)
+            )
+        )
+    }
+}
+
+@Preview(name = "Loading", showBackground = true)
+@Composable
+fun DashboardLoadingPreview() {
+    AppTheme {
         DashboardScreenContent(uiState = DashboardScreenState())
+    }
+}
+
+@Preview(name = "Mixed widget failures", showBackground = true)
+@Composable
+fun DashboardPartialFailurePreview() {
+    AppTheme {
+        DashboardScreenContent(
+            uiState = DashboardScreenState(
+                serverName = "TOWER",
+                arrayStatus = WidgetResult.Success(previewArrayStatus),
+                systemMetrics = WidgetResult.Failure(permissionDenied = true, message = null),
+                containers = WidgetResult.Failure(permissionDenied = false, message = "Network error")
+            )
+        )
     }
 }

@@ -1,0 +1,10 @@
+query MetricsPollQuery {
+    metrics {
+        cpu {
+            percentTotal
+        }
+        memory {
+            percentTotal
+        }
+    }
+}

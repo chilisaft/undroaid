@@ -28,7 +28,13 @@ fun RootNavGraph(
             )
         }
         composable(route = UndroaidGraph.UNDROAID_ROUTE) {
-            UndroaidNavGraph()
+            UndroaidNavGraph(
+                onLoggedOut = {
+                    navController.navigate(UndroaidGraph.AUTH_ROUTE) {
+                        popUpTo(UndroaidGraph.AUTH_ROUTE) { inclusive = true }
+                    }
+                }
+            )
         }
     }
 }

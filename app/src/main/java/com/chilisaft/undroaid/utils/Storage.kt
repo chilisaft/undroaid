@@ -1,50 +1,52 @@
 package com.chilisaft.undroaid.utils
 
 import android.content.SharedPreferences
-import androidx.appcompat.app.AppCompatDelegate
-import com.chilisaft.undroaid.data.repository.StorageRepository
+import com.chilisaft.undroaid.data.models.ThemeMode
 import java.util.UUID
 import javax.inject.Inject
+import javax.inject.Singleton
 import androidx.core.content.edit
-import dagger.Module
-import dagger.hilt.InstallIn
-import dagger.hilt.components.SingletonComponent
 
-@Module
-@InstallIn(SingletonComponent::class)
+@Singleton
 class Storage @Inject constructor(
     @DefaultPreferences defaultSharedPreferences: SharedPreferences,
     @EncryptedPreferences encryptedSharedPreferences: SharedPreferences
-) : StorageRepository {
+) {
 
     private val preferences: SharedPreferences = defaultSharedPreferences
     private val securePreferences: SharedPreferences = encryptedSharedPreferences
 
-    override var apiToken: String?
+    var apiToken: String?
         get() = securePreferences.getString(KEY_API_TOKEN, null)
         set(value) {
             securePreferences.edit() { putString(KEY_API_TOKEN, value) }
         }
 
-    override var serverUrl: String?
+    var serverUrl: String?
         get() = securePreferences.getString(KEY_SERVER_URL, null)
         set(value) {
             securePreferences.edit() { putString(KEY_SERVER_URL, value) }
         }
 
-    override var lastNotification: String?
+    var lastNotification: String?
         get() = preferences.getString(KEY_LAST_NOTIFICATION, null)
         set(value) = preferences.edit() { putString(KEY_LAST_NOTIFICATION, value) }
 
-    override var theme: Int
-        get() = preferences.getInt(KEY_THEME, AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM)
-        set(value) = preferences.edit() { putInt(KEY_THEME, value) }
+    var themeMode: ThemeMode
+        get() = preferences.getString(KEY_THEME_MODE, null)?.let { stored ->
+            runCatching { ThemeMode.valueOf(stored) }.getOrNull()
+        } ?: ThemeMode.SYSTEM
+        set(value) = preferences.edit() { putString(KEY_THEME_MODE, value.name) }
 
-    override var showCoreList: Boolean
+    var showCoreList: Boolean
         get() = preferences.getBoolean(KEY_SHOW_CORE_LIST, false)
         set(value) = preferences.edit() { putBoolean(KEY_SHOW_CORE_LIST, value) }
 
-    override val uuid: String
+    var useDynamicColor: Boolean
+        get() = preferences.getBoolean(KEY_USE_DYNAMIC_COLOR, true)
+        set(value) = preferences.edit() { putBoolean(KEY_USE_DYNAMIC_COLOR, value) }
+
+    val uuid: String
         get() {
             val string = preferences.getString(KEY_UUID, null)
             if (string != null) {
@@ -60,8 +62,9 @@ class Storage @Inject constructor(
         private const val KEY_API_TOKEN = "api_token"
         private const val KEY_SERVER_URL = "serverUrl"
         private const val KEY_LAST_NOTIFICATION = "last_notification"
-        private const val KEY_THEME = "theme"
+        private const val KEY_THEME_MODE = "theme_mode"
         private const val KEY_SHOW_CORE_LIST = "show_core_list"
+        private const val KEY_USE_DYNAMIC_COLOR = "use_dynamic_color"
         private const val KEY_UUID = "uuid"
     }
 }

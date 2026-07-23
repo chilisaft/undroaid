@@ -45,9 +45,10 @@ class LoginRepositoryTest {
         val successResponse = """
         {
           "data": {
-            "server": {
-              "guid": "1234",
-              "name": "Test Server"
+            "info": {
+              "os": {
+                "hostname": "Test Server"
+              }
             }
           }
         }
@@ -77,5 +78,13 @@ class LoginRepositoryTest {
         // Credentials are only persisted on success; a failed attempt must leave storage untouched.
         verify(exactly = 0) { storage.serverUrl = any() }
         verify(exactly = 0) { storage.apiToken = any() }
+    }
+
+    @Test
+    fun `logout clears the stored server url and api token`() {
+        repository.logout()
+
+        verify { storage.serverUrl = null }
+        verify { storage.apiToken = null }
     }
 }

@@ -1,0 +1,11 @@
+query NotificationsListQuery {
+    notifications {
+        list(filter: { type: UNREAD, offset: 0, limit: 50 }) {
+            id
+            title
+            description
+            importance
+            formattedTimestamp
+        }
+    }
+}

@@ -1,0 +1,15 @@
+query SystemMetricsQuery {
+    info {
+        os {
+            uptime
+        }
+    }
+    metrics {
+        cpu {
+            percentTotal
+        }
+        memory {
+            percentTotal
+        }
+    }
+}

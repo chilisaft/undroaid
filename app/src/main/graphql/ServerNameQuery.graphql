@@ -1,0 +1,5 @@
+query ServerNameQuery {
+    vars {
+        name
+    }
+}

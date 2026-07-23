@@ -21,7 +21,7 @@ class LoginRepository @Inject constructor(
                 .addHttpHeader("X-API-KEY-OVERRIDE", login.apiToken?.trim() ?: "")
                 .execute()
 
-            if (response.data?.server != null && !response.hasErrors()) {
+            if (response.data?.info != null && !response.hasErrors()) {
                 // Login successful, save credentials
                 storage.serverUrl = login.serverUrl
                 storage.apiToken = login.apiToken
@@ -37,5 +37,10 @@ class LoginRepository @Inject constructor(
 
     fun getSavedLogin(): Login {
         return Login(storage.serverUrl, storage.apiToken)
+    }
+
+    fun logout() {
+        storage.serverUrl = null
+        storage.apiToken = null
     }
 }

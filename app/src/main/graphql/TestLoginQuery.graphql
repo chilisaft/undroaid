@@ -1,6 +1,7 @@
 query TestLoginQuery {
-    server {
-        guid
-        name
+    info {
+        os {
+            hostname
+        }
     }
 }

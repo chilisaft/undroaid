@@ -1,0 +1,8 @@
+query DockerStatusQuery {
+    docker {
+        containers {
+            names
+            state
+        }
+    }
+}

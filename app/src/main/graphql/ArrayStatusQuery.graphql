@@ -1,0 +1,20 @@
+query ArrayStatusQuery {
+    array {
+        state
+        capacity {
+            kilobytes {
+                used
+                total
+            }
+        }
+        disks {
+            status
+        }
+        parities {
+            status
+        }
+        caches {
+            status
+        }
+    }
+}

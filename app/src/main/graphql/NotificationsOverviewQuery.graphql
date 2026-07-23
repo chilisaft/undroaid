@@ -1,0 +1,9 @@
+query NotificationsOverviewQuery {
+    notifications {
+        overview {
+            unread {
+                total
+            }
+        }
+    }
+}
