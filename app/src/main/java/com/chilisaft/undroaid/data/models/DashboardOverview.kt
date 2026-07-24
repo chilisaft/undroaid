@@ -4,7 +4,9 @@ data class ArrayStatus(
     val statusLabel: String,
     val healthy: Boolean,
     val usedKb: Long?,
-    val totalKb: Long?
+    val totalKb: Long?,
+    /** Size of the (first) parity disk, in KB - the scan size for parity check ETA math, not the same as [totalKb] (sum of data disks). */
+    val paritySizeKb: Long?
 )
 
 data class SystemMetrics(
@@ -21,6 +23,6 @@ data class MetricsSample(
 
 data class DockerContainerSummary(
     val name: String,
-    val isRunning: Boolean,
+    val state: DockerContainerState,
     val iconUrl: String?
 )

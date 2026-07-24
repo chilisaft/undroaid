@@ -111,33 +111,30 @@ class DockerViewModelTest {
     }
 
     @Test
-    fun `restart stops then starts the container and reloads`() {
-        coEvery { repository.stopContainer("c1") } returns WidgetResult.Success(Unit)
-        coEvery { repository.startContainer("c1") } returns WidgetResult.Success(Unit)
+    fun `restart calls the repository and reloads on success`() {
+        coEvery { repository.restartContainer("c1") } returns WidgetResult.Success(Unit)
         viewModel = DockerViewModel(repository)
         testDispatcher.scheduler.advanceUntilIdle()
 
         viewModel.restart("c1")
         testDispatcher.scheduler.advanceUntilIdle()
 
-        coVerify { repository.stopContainer("c1") }
-        coVerify { repository.startContainer("c1") }
+        coVerify { repository.restartContainer("c1") }
         coVerify(exactly = 2) { repository.getContainers() }
         assertThat(viewModel.uiState.value.actioningIds).isEmpty()
     }
 
     @Test
-    fun `restart does not attempt to start when stop fails, but still reloads`() {
-        coEvery { repository.stopContainer("c1") } returns WidgetResult.Failure(permissionDenied = false, message = "boom")
+    fun `restart does not reload on failure`() {
+        coEvery { repository.restartContainer("c1") } returns WidgetResult.Failure(permissionDenied = false, message = "boom")
         viewModel = DockerViewModel(repository)
         testDispatcher.scheduler.advanceUntilIdle()
 
         viewModel.restart("c1")
         testDispatcher.scheduler.advanceUntilIdle()
 
-        coVerify { repository.stopContainer("c1") }
-        coVerify(exactly = 0) { repository.startContainer(any()) }
-        coVerify(exactly = 2) { repository.getContainers() }
+        coVerify { repository.restartContainer("c1") }
+        coVerify(exactly = 1) { repository.getContainers() }
         assertThat(viewModel.uiState.value.actioningIds).isEmpty()
     }
 }

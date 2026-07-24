@@ -1,6 +1,7 @@
 package com.chilisaft.undroaid.data.repository
 
 import com.apollographql.apollo.ApolloClient
+import com.chilisaft.undroaid.data.models.DockerContainerState
 import com.chilisaft.undroaid.data.models.WidgetResult
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.flow.first
@@ -44,6 +45,39 @@ class ServerRepositoryTest {
     }
 
     @Test
+    fun `getServerVersion returns the unraid core version`() = runBlocking {
+        mockWebServer.enqueue(MockResponse().setBody("""{"data": {"info": {"versions": {"core": {"unraid": "6.12.10"}}}}}"""))
+
+        val result = repository.getServerVersion()
+
+        assertThat(result).isEqualTo(WidgetResult.Success("6.12.10"))
+    }
+
+    @Test
+    fun `getApiKeyInfo maps the key's name and roles`() = runBlocking {
+        mockWebServer.enqueue(
+            MockResponse().setBody(
+                """{"data": {"me": {"name": "undroaid-app", "description": "", "roles": ["ADMIN", "CONNECT"]}}}"""
+            )
+        )
+
+        val result = repository.getApiKeyInfo()
+
+        val apiKeyInfo = (result as WidgetResult.Success).data
+        assertThat(apiKeyInfo.name).isEqualTo("undroaid-app")
+        assertThat(apiKeyInfo.roles).containsExactly("Admin", "Connect").inOrder()
+    }
+
+    @Test
+    fun `getApiKeyInfo reports permission denied separately from other failures`() = runBlocking {
+        mockWebServer.enqueue(MockResponse().setBody("""{"errors": [{"message": "Forbidden", "extensions": {"code": "FORBIDDEN"}}]}"""))
+
+        val result = repository.getApiKeyInfo() as WidgetResult.Failure
+
+        assertThat(result.permissionDenied).isTrue()
+    }
+
+    @Test
     fun `getArrayStatus maps a healthy array`() = runBlocking {
         val json = """
         {
@@ -52,7 +86,7 @@ class ServerRepositoryTest {
               "state": "STARTED",
               "capacity": { "kilobytes": { "used": "1024", "total": "4096" } },
               "disks": [{ "status": "DISK_OK" }],
-              "parities": [{ "status": "DISK_OK" }],
+              "parities": [{ "status": "DISK_OK", "size": "4294967296" }],
               "caches": [{ "status": "DISK_OK" }]
             }
           }
@@ -67,6 +101,7 @@ class ServerRepositoryTest {
         assertThat(status.healthy).isTrue()
         assertThat(status.usedKb).isEqualTo(1024L)
         assertThat(status.totalKb).isEqualTo(4096L)
+        assertThat(status.paritySizeKb).isEqualTo(4294967296L)
     }
 
     @Test
@@ -78,7 +113,7 @@ class ServerRepositoryTest {
               "state": "STARTED",
               "capacity": { "kilobytes": { "used": "1024", "total": "4096" } },
               "disks": [{ "status": "DISK_DSBL" }],
-              "parities": [{ "status": "DISK_OK" }],
+              "parities": [{ "status": "DISK_OK", "size": "4294967296" }],
               "caches": []
             }
           }
@@ -89,6 +124,83 @@ class ServerRepositoryTest {
         val result = repository.getArrayStatus()
 
         assertThat((result as WidgetResult.Success).data.healthy).isFalse()
+    }
+
+    @Test
+    fun `getParityCheckStatus maps status, progress, speed, and errors`() = runBlocking {
+        val json = """
+        {
+          "data": {
+            "array": {
+              "parityCheckStatus": {
+                "status": "RUNNING", "progress": 42, "speed": "150", "errors": 0,
+                "correcting": false, "paused": false, "running": true
+              }
+            }
+          }
+        }
+        """.trimIndent()
+        mockWebServer.enqueue(MockResponse().setBody(json))
+
+        val result = repository.getParityCheckStatus()
+
+        val parityCheck = (result as WidgetResult.Success).data
+        assertThat(parityCheck.running).isTrue()
+        assertThat(parityCheck.progressPercent).isEqualTo(42)
+        assertThat(parityCheck.speed).isEqualTo("150")
+        assertThat(parityCheck.statusLabel).isEqualTo("Running")
+    }
+
+    @Test
+    fun `getParityCheckStatus treats parity check as running when status says RUNNING even if the running flag itself is false`() = runBlocking {
+        // Confirmed against a real server: the API's `running`/`paused` booleans and its `status`
+        // enum can disagree - `status` correctly read RUNNING while `running` was false/null in
+        // the same response. Trusting the booleans alone silently hides an active check, which is
+        // exactly the bug the user hit (Main tab showed "Running" text but no Pause/Stop buttons,
+        // and the Dashboard's parity check banner never appeared at all).
+        val json = """
+        {
+          "data": {
+            "array": {
+              "parityCheckStatus": {
+                "status": "RUNNING", "progress": 42, "speed": "150", "errors": 0,
+                "correcting": false, "paused": false, "running": false
+              }
+            }
+          }
+        }
+        """.trimIndent()
+        mockWebServer.enqueue(MockResponse().setBody(json))
+
+        val result = repository.getParityCheckStatus()
+
+        val parityCheck = (result as WidgetResult.Success).data
+        assertThat(parityCheck.running).isTrue()
+        assertThat(parityCheck.paused).isFalse()
+    }
+
+    @Test
+    fun `getParityCheckStatus reports never-run status with null fields`() = runBlocking {
+        val json = """
+        {
+          "data": {
+            "array": {
+              "parityCheckStatus": {
+                "status": "NEVER_RUN", "progress": null, "speed": null, "errors": null,
+                "correcting": null, "paused": null, "running": null
+              }
+            }
+          }
+        }
+        """.trimIndent()
+        mockWebServer.enqueue(MockResponse().setBody(json))
+
+        val result = repository.getParityCheckStatus()
+
+        val parityCheck = (result as WidgetResult.Success).data
+        assertThat(parityCheck.statusLabel).isEqualTo("Never Run")
+        assertThat(parityCheck.running).isFalse()
+        assertThat(parityCheck.paused).isFalse()
     }
 
     @Test
@@ -168,7 +280,8 @@ class ServerRepositoryTest {
             "docker": {
               "containers": [
                 { "names": ["/Plex-Media-Server"], "state": "RUNNING", "iconUrl": "https://example.com/plex.png" },
-                { "names": ["/Home-Assistant"], "state": "EXITED", "iconUrl": null }
+                { "names": ["/Home-Assistant"], "state": "EXITED", "iconUrl": null },
+                { "names": ["/qBittorrent"], "state": "PAUSED", "iconUrl": null }
               ]
             }
           }
@@ -179,13 +292,15 @@ class ServerRepositoryTest {
         val result = repository.getDockerContainers()
 
         val containers = (result as WidgetResult.Success).data
-        assertThat(containers).hasSize(2)
+        assertThat(containers).hasSize(3)
         assertThat(containers[0].name).isEqualTo("Plex-Media-Server")
-        assertThat(containers[0].isRunning).isTrue()
+        assertThat(containers[0].state).isEqualTo(DockerContainerState.RUNNING)
         assertThat(containers[0].iconUrl).isEqualTo("https://example.com/plex.png")
         assertThat(containers[1].name).isEqualTo("Home-Assistant")
-        assertThat(containers[1].isRunning).isFalse()
+        assertThat(containers[1].state).isEqualTo(DockerContainerState.EXITED)
         assertThat(containers[1].iconUrl).isNull()
+        assertThat(containers[2].name).isEqualTo("qBittorrent")
+        assertThat(containers[2].state).isEqualTo(DockerContainerState.PAUSED)
     }
 
     @Test

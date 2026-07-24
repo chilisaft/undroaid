@@ -89,6 +89,7 @@ dependencies {
     val composeBom = platform(libs.androidx.compose.bom)
 
     implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.core.splashscreen)
     implementation(composeBom)
     implementation(libs.androidx.compose.foundation.core)
     implementation(libs.androidx.compose.foundation.layout)
@@ -152,5 +153,7 @@ apollo {
     service("service") {
         packageName.set("com.chilisaft.undroaid.graphql")
         mapScalar("PrefixedID", "kotlin.String")
+        mapScalar("DateTime", "kotlin.String")
+        mapScalar("BigInt", "kotlin.String")
     }
 }

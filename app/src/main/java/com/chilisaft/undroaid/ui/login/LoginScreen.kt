@@ -1,12 +1,18 @@
 package com.chilisaft.undroaid.ui.login
 
 import android.content.res.Configuration
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Computer
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -16,8 +22,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -94,6 +102,10 @@ fun LoginContent(
                     submit = onLoginClick,
                     modifier = Modifier.fillMaxWidth()
                 )
+
+                Spacer(modifier = Modifier.height(spacing.small))
+
+                ApiKeyHelpSection()
 
                 Spacer(modifier = Modifier.height(spacing.medium))
 
@@ -218,6 +230,75 @@ fun ApiTokenField(
         shape = RoundedCornerShape(30),
         visualTransformation = if (isTokenVisible) VisualTransformation.None else PasswordVisualTransformation()
     )
+}
+
+private const val UNRAID_API_DOCS_URL = "https://docs.unraid.net/API/how-to-use-the-api/"
+
+/**
+ * Collapsed by default so it doesn't clutter the login form for anyone who already knows the
+ * drill - just a quick reference for first-time setup, plus a link to Unraid's own docs for
+ * anything more (the official site, not something we host/maintain ourselves).
+ */
+@Composable
+private fun ApiKeyHelpSection() {
+    val spacing = MaterialTheme.spacing
+    val uriHandler = LocalUriHandler.current
+    var expanded by remember { mutableStateOf(false) }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(spacing.small))
+                .clickable { expanded = !expanded }
+                .padding(vertical = spacing.small),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(Icons.Filled.HelpOutline, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            Spacer(Modifier.width(spacing.small))
+            Text(
+                "Where do I get an API key?",
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.weight(1f)
+            )
+            Icon(
+                if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                contentDescription = if (expanded) "Collapse" else "Expand",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        AnimatedVisibility(visible = expanded) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = spacing.small, top = spacing.extraSmall, bottom = spacing.small),
+                verticalArrangement = Arrangement.spacedBy(spacing.extraSmall)
+            ) {
+                val steps = listOf(
+                    "Open your Unraid server's webUI and go to Settings → Management Access → API Keys.",
+                    "Create a new API key, give it a name, and choose which roles it should have.",
+                    "\"Admin\" grants this app full access to every feature; pick a narrower role if you'd rather limit what it can do.",
+                    "Copy the generated key and paste it above, along with your server's URL."
+                )
+                steps.forEachIndexed { index, step ->
+                    Text(
+                        "${index + 1}. $step",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                TextButton(
+                    onClick = { uriHandler.openUri(UNRAID_API_DOCS_URL) },
+                    contentPadding = PaddingValues(vertical = spacing.extraSmall, horizontal = spacing.small)
+                ) {
+                    Text("Official Unraid API docs")
+                    Spacer(Modifier.width(spacing.extraSmall))
+                    Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null, modifier = Modifier.size(16.dp))
+                }
+            }
+        }
+    }
 }
 
 @Preview(name = "Light Mode", showBackground = true)

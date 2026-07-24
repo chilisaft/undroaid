@@ -2,12 +2,14 @@ package com.chilisaft.undroaid.ui.dashboard
 
 import com.chilisaft.undroaid.data.models.ArrayStatus
 import com.chilisaft.undroaid.data.models.MetricsSample
+import com.chilisaft.undroaid.data.models.ParityCheckInfo
 import com.chilisaft.undroaid.data.models.SystemMetrics
 import com.chilisaft.undroaid.data.models.WidgetResult
 import com.chilisaft.undroaid.data.repository.NotificationsRepository
 import com.chilisaft.undroaid.data.repository.ServerRepository
 import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -30,7 +32,13 @@ class DashboardViewModelTest {
 
     private val testDispatcher = StandardTestDispatcher()
 
-    private val testArrayStatus = ArrayStatus(statusLabel = "Array Started", healthy = true, usedKb = 1024L, totalKb = 4096L)
+    private val testArrayStatus = ArrayStatus(
+        statusLabel = "Array Started", healthy = true, usedKb = 1024L, totalKb = 4096L, paritySizeKb = 4096L
+    )
+    private fun parityCheck(running: Boolean = false, progress: Int = 0) = ParityCheckInfo(
+        statusLabel = if (running) "Running" else "Never Run", running = running, paused = false,
+        progressPercent = progress, speed = null, errors = 0, correcting = false
+    )
     private val testSystemMetrics = SystemMetrics(bootTimeIso = "2024-01-01T00:00:00Z", cpuLoadPercent = 24.5, memoryLoadPercent = 58.2)
 
     // Buffered so `emit` from the test body can complete without needing an actively-suspended
@@ -44,6 +52,7 @@ class DashboardViewModelTest {
         repository = mockk {
             coEvery { getServerName() } returns WidgetResult.Success("TOWER")
             coEvery { getArrayStatus() } returns WidgetResult.Success(testArrayStatus)
+            coEvery { getParityCheckStatus() } returns WidgetResult.Success(parityCheck())
             coEvery { getSystemMetrics() } returns WidgetResult.Success(testSystemMetrics)
             coEvery { getDockerContainers() } returns WidgetResult.Success(emptyList())
             every { observeSystemMetricsPoll() } returns metricsPollFlow
@@ -66,6 +75,7 @@ class DashboardViewModelTest {
         val state = viewModel.uiState.value
         assertThat(state.serverName).isNull()
         assertThat(state.arrayStatus).isEqualTo(WidgetResult.Loading)
+        assertThat(state.parityCheck).isEqualTo(WidgetResult.Loading)
         assertThat(state.systemMetrics).isEqualTo(WidgetResult.Loading)
         assertThat(state.containers).isEqualTo(WidgetResult.Loading)
         assertThat(state.unreadNotificationCount).isEqualTo(WidgetResult.Loading)
@@ -80,6 +90,7 @@ class DashboardViewModelTest {
         val state = viewModel.uiState.value
         assertThat(state.serverName).isEqualTo("TOWER")
         assertThat(state.arrayStatus).isEqualTo(WidgetResult.Success(testArrayStatus))
+        assertThat(state.parityCheck).isEqualTo(WidgetResult.Success(parityCheck()))
         assertThat(state.systemMetrics).isEqualTo(WidgetResult.Success(testSystemMetrics))
         assertThat(state.containers).isEqualTo(WidgetResult.Success(emptyList<Nothing>()))
         assertThat(state.unreadNotificationCount).isEqualTo(WidgetResult.Success(3))
@@ -96,6 +107,18 @@ class DashboardViewModelTest {
         assertThat(state.containers).isEqualTo(WidgetResult.Failure(permissionDenied = true, message = null))
         assertThat(state.arrayStatus).isEqualTo(WidgetResult.Success(testArrayStatus))
         assertThat(state.systemMetrics).isEqualTo(WidgetResult.Success(testSystemMetrics))
+    }
+
+    @Test
+    fun `a failure on the parity check widget does not affect array status`() {
+        coEvery { repository.getParityCheckStatus() } returns WidgetResult.Failure(permissionDenied = false, message = "boom")
+
+        viewModel = createViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertThat(state.parityCheck).isEqualTo(WidgetResult.Failure(permissionDenied = false, message = "boom"))
+        assertThat(state.arrayStatus).isEqualTo(WidgetResult.Success(testArrayStatus))
     }
 
     @Test
@@ -155,5 +178,70 @@ class DashboardViewModelTest {
         testDispatcher.scheduler.advanceUntilIdle()
 
         assertThat(viewModel.uiState.value.systemMetrics).isInstanceOf(WidgetResult.Failure::class.java)
+    }
+
+    @Test
+    fun `polls the parity check every 5s while running, and stops once it finishes`() {
+        coEvery { repository.getParityCheckStatus() } returnsMany listOf(
+            WidgetResult.Success(parityCheck(running = true, progress = 10)),
+            WidgetResult.Success(parityCheck(running = true, progress = 20)),
+            WidgetResult.Success(parityCheck(running = false, progress = 100))
+        )
+        viewModel = createViewModel()
+        testDispatcher.scheduler.runCurrent() // only the initial load - advanceUntilIdle would fast-forward through the poll's delay too
+        assertThat(viewModel.uiState.value.parityCheck).isEqualTo(WidgetResult.Success(parityCheck(running = true, progress = 10)))
+
+        testDispatcher.scheduler.advanceTimeBy(5_000)
+        testDispatcher.scheduler.runCurrent()
+        assertThat(viewModel.uiState.value.parityCheck).isEqualTo(WidgetResult.Success(parityCheck(running = true, progress = 20)))
+
+        testDispatcher.scheduler.advanceTimeBy(5_000)
+        testDispatcher.scheduler.runCurrent()
+        assertThat(viewModel.uiState.value.parityCheck).isEqualTo(WidgetResult.Success(parityCheck(running = false, progress = 100)))
+
+        coVerify(exactly = 3) { repository.getParityCheckStatus() }
+    }
+
+    @Test
+    fun `a failed poll tick is skipped, keeping the last good parity check, rather than stopping the poll`() {
+        // Regression test: a Failure result used to be indistinguishable from "the check
+        // finished" (both made isParityCheckRunning() return false), so a single transient
+        // failure - e.g. a network hiccup right after the device unlocks - permanently killed
+        // the poll loop. It should instead keep the last successful parity check on screen and
+        // keep polling, recovering on the next successful tick.
+        coEvery { repository.getParityCheckStatus() } returnsMany listOf(
+            WidgetResult.Success(parityCheck(running = true, progress = 10)),
+            WidgetResult.Failure(permissionDenied = false, message = "boom"),
+            WidgetResult.Success(parityCheck(running = true, progress = 30)),
+            WidgetResult.Success(parityCheck(running = false, progress = 100))
+        )
+        viewModel = createViewModel()
+        testDispatcher.scheduler.runCurrent()
+        assertThat(viewModel.uiState.value.parityCheck).isEqualTo(WidgetResult.Success(parityCheck(running = true, progress = 10)))
+
+        testDispatcher.scheduler.advanceTimeBy(5_000)
+        testDispatcher.scheduler.runCurrent()
+        assertThat(viewModel.uiState.value.parityCheck).isEqualTo(WidgetResult.Success(parityCheck(running = true, progress = 10)))
+
+        testDispatcher.scheduler.advanceTimeBy(5_000)
+        testDispatcher.scheduler.runCurrent()
+        assertThat(viewModel.uiState.value.parityCheck).isEqualTo(WidgetResult.Success(parityCheck(running = true, progress = 30)))
+
+        testDispatcher.scheduler.advanceTimeBy(5_000)
+        testDispatcher.scheduler.runCurrent()
+        assertThat(viewModel.uiState.value.parityCheck).isEqualTo(WidgetResult.Success(parityCheck(running = false, progress = 100)))
+
+        coVerify(exactly = 4) { repository.getParityCheckStatus() }
+    }
+
+    @Test
+    fun `does not poll the parity check when none is running`() {
+        viewModel = createViewModel() // default stub: not running
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        testDispatcher.scheduler.advanceTimeBy(10_000)
+        testDispatcher.scheduler.runCurrent()
+
+        coVerify(exactly = 1) { repository.getParityCheckStatus() }
     }
 }

@@ -14,7 +14,6 @@ import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.FolderShared
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.MoreHoriz
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.outlined.Computer
@@ -31,6 +30,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,6 +55,8 @@ import com.chilisaft.undroaid.ui.server.ServerScreen
 import com.chilisaft.undroaid.ui.settings.SettingsScreen
 import com.chilisaft.undroaid.ui.shares.SharesScreen
 import com.chilisaft.undroaid.ui.theme.spacing
+import com.chilisaft.undroaid.ui.usermenu.UserMenuSheet
+import com.chilisaft.undroaid.ui.usermenu.UserMenuViewModel
 import com.chilisaft.undroaid.ui.vms.VmsScreen
 
 private const val SETTINGS_ROUTE = "settings"
@@ -115,6 +118,7 @@ fun UndroaidNavGraph(
 
     var showMoreSheet by remember { mutableStateOf(false) }
     val moreSheetState = rememberModalBottomSheetState()
+    var showUserSheet by remember { mutableStateOf(false) }
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -169,6 +173,7 @@ fun UndroaidNavGraph(
                 DashboardScreen(
                     viewModel = dashboardViewModel,
                     onNotificationsClick = { navController.navigate(NOTIFICATIONS_ROUTE) },
+                    onUserClick = { showUserSheet = true },
                     onShowAllContainers = {
                         navController.navigate(BottomNavDestination.Docker.route) {
                             popUpTo(navController.graph.findStartDestination().id) {
@@ -181,13 +186,13 @@ fun UndroaidNavGraph(
                 )
             }
             composable(BottomNavDestination.Main.route) {
-                MainScreen()
+                MainScreen(onUserClick = { showUserSheet = true })
             }
             composable(BottomNavDestination.Docker.route) {
-                DockerScreen()
+                DockerScreen(onUserClick = { showUserSheet = true })
             }
             composable(BottomNavDestination.Vms.route) {
-                VmsScreen()
+                VmsScreen(onUserClick = { showUserSheet = true })
             }
             composable(SHARES_ROUTE) {
                 SharesScreen(onBack = { navController.popBackStack() })
@@ -196,10 +201,7 @@ fun UndroaidNavGraph(
                 ServerScreen(onBack = { navController.popBackStack() })
             }
             composable(SETTINGS_ROUTE) {
-                SettingsScreen(
-                    onBack = { navController.popBackStack() },
-                    onLoggedOut = onLoggedOut
-                )
+                SettingsScreen(onBack = { navController.popBackStack() })
             }
             composable(NOTIFICATIONS_ROUTE) {
                 NotificationsScreen(
@@ -223,21 +225,38 @@ fun UndroaidNavGraph(
                 onServerClick = {
                     showMoreSheet = false
                     navController.navigate(SERVER_ROUTE)
-                },
-                onSettingsClick = {
-                    showMoreSheet = false
-                    navController.navigate(SETTINGS_ROUTE)
                 }
             )
         }
     }
+
+    if (showUserSheet) {
+        val userMenuViewModel: UserMenuViewModel = hiltViewModel()
+        val userMenuState by userMenuViewModel.uiState.collectAsState()
+
+        LaunchedEffect(userMenuState.isLoggedOut) {
+            if (userMenuState.isLoggedOut) {
+                showUserSheet = false
+                onLoggedOut()
+            }
+        }
+
+        UserMenuSheet(
+            uiState = userMenuState,
+            onDismiss = { showUserSheet = false },
+            onSettingsClick = {
+                showUserSheet = false
+                navController.navigate(SETTINGS_ROUTE)
+            },
+            onLogoutConfirmed = userMenuViewModel::logout
+        )
+    }
 }
 
 @Composable
-private fun MoreMenuContent(onSharesClick: () -> Unit, onServerClick: () -> Unit, onSettingsClick: () -> Unit) {
+private fun MoreMenuContent(onSharesClick: () -> Unit, onServerClick: () -> Unit) {
     MoreMenuItem(icon = Icons.Filled.FolderShared, label = "Shares", onClick = onSharesClick)
     MoreMenuItem(icon = Icons.Filled.Memory, label = "Server", onClick = onServerClick)
-    MoreMenuItem(icon = Icons.Filled.Settings, label = "Settings", onClick = onSettingsClick)
 }
 
 @Composable

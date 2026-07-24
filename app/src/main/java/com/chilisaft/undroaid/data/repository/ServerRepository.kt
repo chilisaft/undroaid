@@ -3,18 +3,26 @@ package com.chilisaft.undroaid.data.repository
 import com.apollographql.apollo.ApolloClient
 import com.chilisaft.undroaid.data.api.runWidgetQuery
 import com.chilisaft.undroaid.data.models.ArrayStatus
+import com.chilisaft.undroaid.data.models.DockerContainerState
 import com.chilisaft.undroaid.data.models.DockerContainerSummary
 import com.chilisaft.undroaid.data.models.MetricsSample
+import com.chilisaft.undroaid.data.models.ApiKeyInfo
+import com.chilisaft.undroaid.data.models.ParityCheckInfo
 import com.chilisaft.undroaid.data.models.SystemMetrics
 import com.chilisaft.undroaid.data.models.WidgetResult
+import com.chilisaft.undroaid.graphql.ApiKeyInfoQuery
 import com.chilisaft.undroaid.graphql.ArrayStatusQuery
 import com.chilisaft.undroaid.graphql.DockerStatusQuery
 import com.chilisaft.undroaid.graphql.MetricsPollQuery
+import com.chilisaft.undroaid.graphql.ParityCheckStatusQuery
 import com.chilisaft.undroaid.graphql.ServerNameQuery
+import com.chilisaft.undroaid.graphql.ServerVersionQuery
 import com.chilisaft.undroaid.graphql.SystemMetricsQuery
 import com.chilisaft.undroaid.graphql.type.ArrayDiskStatus
 import com.chilisaft.undroaid.graphql.type.ArrayState
 import com.chilisaft.undroaid.graphql.type.ContainerState
+import com.chilisaft.undroaid.graphql.type.ParityCheckStatus
+import com.chilisaft.undroaid.graphql.type.Role
 import javax.inject.Inject
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -35,8 +43,25 @@ class ServerRepository @Inject constructor(
     suspend fun getServerName(): WidgetResult<String?> =
         apolloClient.runWidgetQuery(ServerNameQuery()) { it.vars.name }
 
+    suspend fun getServerVersion(): WidgetResult<String?> =
+        apolloClient.runWidgetQuery(ServerVersionQuery()) { it.info.versions.core.unraid }
+
+    /**
+     * The schema's `me` field resolves to whatever identity is authenticating the request -
+     * for an API key (this app's only auth method), that's the key itself, so `name` here is
+     * the API key's name, not a human user account.
+     */
+    suspend fun getApiKeyInfo(): WidgetResult<ApiKeyInfo> =
+        apolloClient.runWidgetQuery(ApiKeyInfoQuery()) { data ->
+            ApiKeyInfo(name = data.me.name, roles = data.me.roles.map { it.toRoleLabel() })
+        }
+
     suspend fun getArrayStatus(): WidgetResult<ArrayStatus> =
         apolloClient.runWidgetQuery(ArrayStatusQuery()) { it.array.toArrayStatus() }
+
+    /** Independent from [getArrayStatus] - see the identical doc comment on `ArrayRepository.getParityCheckStatus()`. */
+    suspend fun getParityCheckStatus(): WidgetResult<ParityCheckInfo> =
+        apolloClient.runWidgetQuery(ParityCheckStatusQuery()) { data -> data.array.parityCheckStatus.toParityCheckInfo() }
 
     suspend fun getSystemMetrics(): WidgetResult<SystemMetrics> =
         apolloClient.runWidgetQuery(SystemMetricsQuery()) { data ->
@@ -78,15 +103,42 @@ class ServerRepository @Inject constructor(
             statusLabel = state.toLabel(),
             healthy = diskStatuses.isNotEmpty() && diskStatuses.all { it == ArrayDiskStatus.DISK_OK },
             usedKb = capacity.kilobytes.used.toLongOrNull(),
-            totalKb = capacity.kilobytes.total.toLongOrNull()
+            totalKb = capacity.kilobytes.total.toLongOrNull(),
+            paritySizeKb = parities.firstOrNull()?.size?.toLongOrNull()
         )
     }
 
+    /** See the identical comment on `ArrayRepository.toParityCheckInfo()` - same fix, mirrored here for Dashboard's query. */
+    private fun ParityCheckStatusQuery.ParityCheckStatus.toParityCheckInfo() = ParityCheckInfo(
+        statusLabel = status.toLabel(),
+        running = (running ?: false) || status == ParityCheckStatus.RUNNING,
+        paused = (paused ?: false) || status == ParityCheckStatus.PAUSED,
+        progressPercent = progress,
+        speed = speed,
+        errors = errors,
+        correcting = correcting
+    )
+
     private fun DockerStatusQuery.Container.toDockerContainerSummary() = DockerContainerSummary(
         name = names.firstOrNull()?.removePrefix("/") ?: "Unknown",
-        isRunning = state == ContainerState.RUNNING,
+        state = state.toDockerContainerState(),
         iconUrl = iconUrl
     )
+
+    private fun ContainerState.toDockerContainerState(): DockerContainerState = when (this) {
+        ContainerState.RUNNING -> DockerContainerState.RUNNING
+        ContainerState.PAUSED -> DockerContainerState.PAUSED
+        ContainerState.EXITED -> DockerContainerState.EXITED
+        ContainerState.UNKNOWN__ -> DockerContainerState.EXITED
+    }
+
+    private fun Role.toRoleLabel(): String = when (this) {
+        Role.ADMIN -> "Admin"
+        Role.CONNECT -> "Connect"
+        Role.GUEST -> "Guest"
+        Role.VIEWER -> "Viewer"
+        Role.UNKNOWN__ -> "Unknown"
+    }
 
     private fun ArrayState.toLabel(): String = when (this) {
         ArrayState.STARTED -> "Array Started"
@@ -101,5 +153,15 @@ class ServerRepository @Inject constructor(
         ArrayState.NEW_DISK_TOO_SMALL -> "New Disk Too Small"
         ArrayState.NO_DATA_DISKS -> "No Data Disks"
         ArrayState.UNKNOWN__ -> "Unknown"
+    }
+
+    private fun ParityCheckStatus.toLabel(): String = when (this) {
+        ParityCheckStatus.NEVER_RUN -> "Never Run"
+        ParityCheckStatus.RUNNING -> "Running"
+        ParityCheckStatus.PAUSED -> "Paused"
+        ParityCheckStatus.COMPLETED -> "Completed"
+        ParityCheckStatus.CANCELLED -> "Cancelled"
+        ParityCheckStatus.FAILED -> "Failed"
+        ParityCheckStatus.UNKNOWN__ -> "Unknown"
     }
 }

@@ -11,7 +11,9 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.TaskAlt
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -35,12 +37,16 @@ fun NotificationsScreen(
     viewModel: NotificationsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    // The dashboard's unread badge doesn't observe this screen, so nudge it to refresh whenever
+    // this screen leaves composition - via DisposableEffect rather than piggybacking on the
+    // back-arrow's onClick, since Compose Navigation's system back gesture/button pops the
+    // backstack directly and never calls that lambda, silently skipping the refresh.
+    DisposableEffect(Unit) {
+        onDispose { onNotificationsChanged() }
+    }
     NotificationsScreenContent(
         uiState = uiState,
-        // The dashboard's unread badge doesn't observe this screen, so nudge it to refresh
-        // whenever the user leaves - cheap enough to do unconditionally rather than tracking
-        // whether anything actually changed.
-        onBack = { onNotificationsChanged(); onBack() },
+        onBack = onBack,
         onRetry = viewModel::refresh,
         onDismiss = viewModel::dismiss,
         onDismissAll = viewModel::dismissAll
@@ -82,7 +88,9 @@ fun NotificationsScreenContent(
             )
         }
     ) { padding ->
-        Box(
+        PullToRefreshBox(
+            isRefreshing = uiState.notifications is WidgetResult.Loading,
+            onRefresh = onRetry,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
@@ -134,7 +142,14 @@ private fun NotificationRow(notification: Notification, isDismissing: Boolean, o
             Spacer(Modifier.width(spacing.medium))
             Column(modifier = Modifier.weight(1f)) {
                 Text(notification.title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                Text(notification.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 18.sp)
+                // subject and description sometimes duplicate the title or each other depending on
+                // how the source plugin populated them - only show what actually adds information.
+                if (notification.subject.isNotBlank() && notification.subject != notification.title) {
+                    Text(notification.subject, style = MaterialTheme.typography.bodyMedium)
+                }
+                if (notification.description.isNotBlank() && notification.description != notification.subject) {
+                    Text(notification.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 18.sp)
+                }
                 if (notification.timestamp != null) {
                     Spacer(Modifier.height(spacing.small))
                     Text(notification.timestamp, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
@@ -156,6 +171,7 @@ private val previewNotifications = listOf(
     Notification(
         id = "1",
         title = "Parity Check Complete",
+        subject = "Parity Check Complete",
         description = "System finished scheduled parity check. Duration: 14h 22m. Errors found: 0.",
         level = NotificationLevel.INFO,
         timestamp = "2 hours ago"
@@ -163,7 +179,8 @@ private val previewNotifications = listOf(
     Notification(
         id = "2",
         title = "Disk 4 Temperature Alert",
-        description = "WDC_WD120EDAZ has reached 46°C. Cooling threshold exceeded.",
+        subject = "WDC_WD120EDAZ has reached 46°C",
+        description = "Cooling threshold exceeded.",
         level = NotificationLevel.ALERT,
         timestamp = "5 hours ago"
     )

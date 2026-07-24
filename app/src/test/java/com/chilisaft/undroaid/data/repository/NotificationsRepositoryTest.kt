@@ -47,8 +47,8 @@ class NotificationsRepositoryTest {
           "data": {
             "notifications": {
               "list": [
-                { "id": "n1", "title": "Parity Check Complete", "description": "No errors found.", "importance": "INFO", "formattedTimestamp": "2 hours ago" },
-                { "id": "n2", "title": "Disk 4 Temperature Alert", "description": "Cooling threshold exceeded.", "importance": "ALERT", "formattedTimestamp": "5 hours ago" }
+                { "id": "n1", "title": "Parity Check Complete", "subject": "Parity Check Complete", "description": "No errors found.", "importance": "INFO", "formattedTimestamp": "2 hours ago" },
+                { "id": "n2", "title": "Disk 4 Temperature Alert", "subject": "WDC_WD120EDAZ has reached 46°C", "description": "Cooling threshold exceeded.", "importance": "ALERT", "formattedTimestamp": "5 hours ago" }
               ]
             }
           }
@@ -61,6 +61,7 @@ class NotificationsRepositoryTest {
         val notifications = (result as WidgetResult.Success).data
         assertThat(notifications).hasSize(2)
         assertThat(notifications[0].id).isEqualTo("n1")
+        assertThat(notifications[0].subject).isEqualTo("Parity Check Complete")
         assertThat(notifications[0].level).isEqualTo(NotificationLevel.INFO)
         assertThat(notifications[1].id).isEqualTo("n2")
         assertThat(notifications[1].level).isEqualTo(NotificationLevel.ALERT)

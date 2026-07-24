@@ -1,0 +1,13 @@
+query ParityCheckStatusQuery {
+    array {
+        parityCheckStatus {
+            status
+            progress
+            speed
+            errors
+            correcting
+            paused
+            running
+        }
+    }
+}

@@ -1,0 +1,5 @@
+mutation VmStartMutation($id: PrefixedID!) {
+    vm {
+        start(id: $id)
+    }
+}

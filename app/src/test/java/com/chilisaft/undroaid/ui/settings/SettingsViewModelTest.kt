@@ -1,7 +1,6 @@
 package com.chilisaft.undroaid.ui.settings
 
 import com.chilisaft.undroaid.data.models.ThemeMode
-import com.chilisaft.undroaid.data.repository.LoginRepository
 import com.chilisaft.undroaid.data.repository.SettingsRepository
 import com.google.common.truth.Truth.assertThat
 import io.mockk.every
@@ -22,7 +21,6 @@ class SettingsViewModelTest {
 
     private lateinit var viewModel: SettingsViewModel
     private lateinit var settingsRepository: SettingsRepository
-    private lateinit var loginRepository: LoginRepository
 
     private val themeModeFlow = MutableStateFlow(ThemeMode.SYSTEM)
     private val showCoreListFlow = MutableStateFlow(false)
@@ -38,8 +36,7 @@ class SettingsViewModelTest {
             every { showCoreList } returns showCoreListFlow
             every { useDynamicColor } returns useDynamicColorFlow
         }
-        loginRepository = mockk(relaxed = true)
-        viewModel = SettingsViewModel(settingsRepository, loginRepository)
+        viewModel = SettingsViewModel(settingsRepository)
     }
 
     @After
@@ -88,10 +85,4 @@ class SettingsViewModelTest {
         verify { settingsRepository.setUseDynamicColor(false) }
     }
 
-    @Test
-    fun `logout clears credentials and flags the state as logged out`() {
-        viewModel.logout()
-        verify { loginRepository.logout() }
-        assertThat(viewModel.uiState.value.isLoggedOut).isTrue()
-    }
 }

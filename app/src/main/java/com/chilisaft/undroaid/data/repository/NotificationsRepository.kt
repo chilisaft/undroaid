@@ -35,6 +35,7 @@ class NotificationsRepository @Inject constructor(
     private fun NotificationsListQuery.List.toNotification() = Notification(
         id = id,
         title = title,
+        subject = subject,
         description = description,
         level = importance.toNotificationLevel(),
         timestamp = formattedTimestamp

@@ -28,6 +28,7 @@ class NotificationsViewModelTest {
     private val testNotification = Notification(
         id = "n1",
         title = "Parity Check Complete",
+        subject = "Parity Check Complete",
         description = "No errors found.",
         level = NotificationLevel.INFO,
         timestamp = "2 hours ago"

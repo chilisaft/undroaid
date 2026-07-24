@@ -1,0 +1,23 @@
+query MainArrayQuery {
+    array {
+        state
+        capacity {
+            kilobytes {
+                used
+                total
+            }
+        }
+        boot {
+            ...ArrayDiskFields
+        }
+        parities {
+            ...ArrayDiskFields
+        }
+        disks {
+            ...ArrayDiskFields
+        }
+        caches {
+            ...ArrayDiskFields
+        }
+    }
+}

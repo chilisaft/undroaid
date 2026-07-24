@@ -33,6 +33,19 @@ val onSurfaceLight = Color(0xFF1C1B1B)
 val surfaceVariantLight = Color(0xFFF4F3F7)
 val onSurfaceVariantLight = Color(0xFF44474E)
 
+// Material3's lightColorScheme()/darkColorScheme() default these tonal-elevation roles to the
+// baseline M3 neutral palette when left unset, which happens to sit at nearly the same lightness
+// as this app's custom background/surface (both are a light near-white grey in light mode, both
+// a dark near-black grey in dark mode) - so every Card using surfaceContainerLow/High (Docker
+// rows, Main tab device rows, etc.) barely showed up against the screen background. Explicit,
+// visibly-separated steps fix that; dynamic color (Android 12+) isn't affected since the system
+// already computes a coherent full tonal palette from the wallpaper.
+val surfaceContainerLowestLight = Color(0xFFFFFFFF)
+val surfaceContainerLowLight = Color(0xFFFFFFFF)
+val surfaceContainerLight = Color(0xFFF7F7F8)
+val surfaceContainerHighLight = Color(0xFFECECEE)
+val surfaceContainerHighestLight = Color(0xFFE3E3E6)
+
 // Dark Theme Mapping
 val primaryDark = UnraidOrange
 val onPrimaryDark = Color(0xFF552000)
@@ -55,6 +68,13 @@ val surfaceDark = DarkGrey
 val onSurfaceDark = LightGrey
 val surfaceVariantDark = Color(0xFF303030)
 val onSurfaceVariantDark = Color(0xFFC4C6D0)
+
+// See the light-mode comment above `surfaceContainerLowestLight` - same fix, mirrored for dark.
+val surfaceContainerLowestDark = Color(0xFF121212)
+val surfaceContainerLowDark = Color(0xFF252424)
+val surfaceContainerDark = Color(0xFF2A2929)
+val surfaceContainerHighDark = Color(0xFF343333)
+val surfaceContainerHighestDark = Color(0xFF3F3E3E)
 
 val errorLight = Color(0xFFBA1A1A)
 val onErrorLight = Color(0xFFFFFFFF)

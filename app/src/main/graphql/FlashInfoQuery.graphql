@@ -1,0 +1,6 @@
+query FlashInfoQuery {
+    flash {
+        vendor
+        product
+    }
+}

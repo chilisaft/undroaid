@@ -109,6 +109,15 @@ class DockerRepositoryTest {
     }
 
     @Test
+    fun `restartContainer succeeds when the mutation returns no errors`() = runBlocking {
+        mockWebServer.enqueue(MockResponse().setBody("""{"data": {"docker": {"restart": {"id": "c1"}}}}"""))
+
+        val result = repository.restartContainer("c1")
+
+        assertThat(result).isInstanceOf(WidgetResult.Success::class.java)
+    }
+
+    @Test
     fun `startContainer reports permission denied separately from other failures`() = runBlocking {
         mockWebServer.enqueue(MockResponse().setBody("""{"errors": [{"message": "Forbidden", "extensions": {"code": "FORBIDDEN"}}]}"""))
 

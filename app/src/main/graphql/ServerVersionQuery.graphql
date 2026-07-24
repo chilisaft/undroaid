@@ -1,0 +1,9 @@
+query ServerVersionQuery {
+    info {
+        versions {
+            core {
+                unraid
+            }
+        }
+    }
+}

@@ -12,6 +12,7 @@ query ArrayStatusQuery {
         }
         parities {
             status
+            size
         }
         caches {
             status

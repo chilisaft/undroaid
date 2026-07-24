@@ -1,0 +1,5 @@
+mutation ParityCheckCancelMutation {
+    parityCheck {
+        cancel
+    }
+}

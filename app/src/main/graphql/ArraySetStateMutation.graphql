@@ -1,0 +1,7 @@
+mutation ArraySetStateMutation($input: ArrayStateInput!) {
+    array {
+        setState(input: $input) {
+            state
+        }
+    }
+}

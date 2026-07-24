@@ -13,3 +13,13 @@ data class DockerContainer(
 enum class DockerContainerState {
     RUNNING, PAUSED, EXITED
 }
+
+data class DockerLogLine(
+    val timestamp: String,
+    val message: String
+)
+
+data class DockerLogsPage(
+    val lines: List<DockerLogLine>,
+    val cursor: String?
+)

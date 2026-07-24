@@ -3,6 +3,7 @@ package com.chilisaft.undroaid.data.models
 data class Notification(
     val id: String,
     val title: String,
+    val subject: String,
     val description: String,
     val level: NotificationLevel,
     val timestamp: String?

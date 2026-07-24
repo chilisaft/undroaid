@@ -1,0 +1,5 @@
+mutation VmForceStopMutation($id: PrefixedID!) {
+    vm {
+        forceStop(id: $id)
+    }
+}

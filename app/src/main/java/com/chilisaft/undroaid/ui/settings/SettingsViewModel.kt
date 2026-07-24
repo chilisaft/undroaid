@@ -3,7 +3,6 @@ package com.chilisaft.undroaid.ui.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.chilisaft.undroaid.data.models.ThemeMode
-import com.chilisaft.undroaid.data.repository.LoginRepository
 import com.chilisaft.undroaid.data.repository.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -17,14 +16,12 @@ import javax.inject.Inject
 data class SettingsScreenState(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val showCoreList: Boolean = false,
-    val useDynamicColor: Boolean = true,
-    val isLoggedOut: Boolean = false
+    val useDynamicColor: Boolean = true
 )
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
-    private val settingsRepository: SettingsRepository,
-    private val loginRepository: LoginRepository
+    private val settingsRepository: SettingsRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsScreenState())
@@ -55,10 +52,5 @@ class SettingsViewModel @Inject constructor(
 
     fun setUseDynamicColor(enabled: Boolean) {
         settingsRepository.setUseDynamicColor(enabled)
-    }
-
-    fun logout() {
-        loginRepository.logout()
-        _uiState.update { it.copy(isLoggedOut = true) }
     }
 }

@@ -1,0 +1,22 @@
+fragment ArrayDiskFields on ArrayDisk {
+    id
+    idx
+    name
+    device
+    size
+    status
+    rotational
+    temp
+    numReads
+    numWrites
+    numErrors
+    fsSize
+    fsFree
+    fsUsed
+    type
+    warning
+    critical
+    fsType
+    transport
+    isSpinning
+}

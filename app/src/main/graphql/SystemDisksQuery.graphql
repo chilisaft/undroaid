@@ -1,0 +1,11 @@
+query SystemDisksQuery {
+    disks {
+        device
+        name
+        vendor
+        serialNum
+        firmwareRevision
+        interfaceType
+        smartStatus
+    }
+}

@@ -4,14 +4,12 @@ import android.content.res.Configuration
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.chilisaft.undroaid.data.models.ThemeMode
 import com.chilisaft.undroaid.ui.theme.AppTheme
@@ -20,22 +18,16 @@ import com.chilisaft.undroaid.ui.theme.spacing
 @Composable
 fun SettingsScreen(
     onBack: () -> Unit,
-    onLoggedOut: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
-
-    if (uiState.isLoggedOut) {
-        LaunchedEffect(Unit) { onLoggedOut() }
-    }
 
     SettingsScreenContent(
         uiState = uiState,
         onBack = onBack,
         onThemeModeChange = viewModel::setThemeMode,
         onShowCoreListChange = viewModel::setShowCoreList,
-        onUseDynamicColorChange = viewModel::setUseDynamicColor,
-        onLogoutConfirmed = viewModel::logout
+        onUseDynamicColorChange = viewModel::setUseDynamicColor
     )
 }
 
@@ -46,11 +38,9 @@ fun SettingsScreenContent(
     onBack: () -> Unit = {},
     onThemeModeChange: (ThemeMode) -> Unit = {},
     onShowCoreListChange: (Boolean) -> Unit = {},
-    onUseDynamicColorChange: (Boolean) -> Unit = {},
-    onLogoutConfirmed: () -> Unit = {}
+    onUseDynamicColorChange: (Boolean) -> Unit = {}
 ) {
     val spacing = MaterialTheme.spacing
-    var showLogoutDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -110,36 +100,7 @@ fun SettingsScreenContent(
                     Switch(checked = uiState.showCoreList, onCheckedChange = onShowCoreListChange)
                 }
             }
-
-            SettingsSection(title = "Account") {
-                OutlinedButton(
-                    onClick = { showLogoutDialog = true },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                ) {
-                    Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(spacing.small))
-                    Text("Logout")
-                }
-            }
         }
-    }
-
-    if (showLogoutDialog) {
-        AlertDialog(
-            onDismissRequest = { showLogoutDialog = false },
-            title = { Text("Logout?") },
-            text = { Text("You'll need your server URL and API token to log back in.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    showLogoutDialog = false
-                    onLogoutConfirmed()
-                }) { Text("Logout") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showLogoutDialog = false }) { Text("Cancel") }
-            }
-        )
     }
 }
 
