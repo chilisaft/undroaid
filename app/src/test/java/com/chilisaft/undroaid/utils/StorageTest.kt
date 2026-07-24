@@ -91,12 +91,12 @@ class StorageTest {
     }
 
     @Test
-    fun `useDynamicColor is stored in default preferences and defaults to true`() {
-        storage.useDynamicColor = false
-        verify { defaultEditor.putBoolean("use_dynamic_color", false) }
+    fun `useDynamicColor is stored in default preferences and defaults to false`() {
+        storage.useDynamicColor = true
+        verify { defaultEditor.putBoolean("use_dynamic_color", true) }
 
-        every { defaultPrefs.getBoolean("use_dynamic_color", true) } returns false
-        assertThat(storage.useDynamicColor).isFalse()
+        every { defaultPrefs.getBoolean("use_dynamic_color", false) } returns true
+        assertThat(storage.useDynamicColor).isTrue()
     }
 
     @Test

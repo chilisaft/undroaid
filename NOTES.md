@@ -563,24 +563,113 @@ actually designed.
   - `res/drawable/ic_launcher_monochrome.xml` (new) - the Material You "themed icon"/dynamic-icon
     layer the user asked for. **Deliberately not just a solid recolor of the full mark** - Android
     re-tints this to one flat system color, so reusing the same filled shapes everywhere would
-    merge into a single blob with no visible structure. Instead the case and platter are drawn as
-    outlines (stroke, no fill) while the small accents (hub, arm, the wink) stay solid, so the
-    silhouette still reads under a flat single-tone tint. Wired into both `<monochrome>` slots -
-    `mipmap-anydpi-v26/ic_launcher.xml`/`ic_launcher_round.xml` (added; didn't exist before) and
-    `mipmap-anydpi/ic_launcher.xml`/`ic_launcher_round.xml` (existed already but pointed at the
-    full-color foreground by mistake in the scaffolding - fixed to point here instead).
+    merge into a single blob with no visible structure. First pass drew the case/platter as
+    outlines (stroke, no fill) with the small accents solid on top - worked, but the user pointed
+    out it didn't match the full-color mark's own logic. Redone to mirror that logic instead: in
+    the full-color version ink (case/arm/hub) and gold (the wink) are the two "solid" tones, while
+    pine (platter/screws) is really just a second surface color - so now the case is one solid
+    shape with the platter circle and all four screws punched out as genuine transparent holes
+    (one `<path>`, `android:fillType="evenOdd"`, case + platter + 4 screws as subpaths - a point
+    covered by the case alone stays filled, a point covered by both the case *and* an inner shape
+    becomes a hole), and the arm/hub/wink stay solid on top, floating in that cutout. Wired into
+    both `<monochrome>` slots - `mipmap-anydpi-v26/ic_launcher.xml`/`ic_launcher_round.xml` (added;
+    didn't exist before) and `mipmap-anydpi/ic_launcher.xml`/`ic_launcher_round.xml` (existed
+    already but pointed at the full-color foreground by mistake in the scaffolding - fixed to
+    point here instead).
   - Per-density legacy PNG rasters (`mipmap-hdpi/ic_launcher*.png` etc.) were left untouched -
     with `minSdk 28` (already ≥26) the vector adaptive-icon path always wins, so those PNGs are
     now genuinely dead weight in the APK. Cheap future cleanup, not done this session (touching
     binary assets felt like unnecessary scope beyond what was asked).
   - Verified: `assembleDebug` resource-links cleanly (confirms the hand-written VectorDrawable arc
     path data and group transforms are all valid), full test suite still green (resource-only
-    change), installed on-device. Not independently screenshotted/eyeballed post-install this
-    session - worth a manual check of the actual launcher icon (and the themed/monochrome variant,
-    toggleable on a supporting launcher) next time the device is at hand.
+    change), installed on-device.
+  - **Icon didn't show up on the home screen after the first install** - a plain `adb install -r`
+    (what `installDebug` does) updates the APK but many launchers cache the generated icon bitmap
+    and don't notice a changed adaptive-icon resource on a same-version reinstall. Fixed with a
+    full `adb uninstall` + fresh install, which reliably forces the cache to drop. Worth remembering
+    for any future icon-only change - it's an icon-cache quirk, not a build/wiring problem.
+  - **Fixed, same session, once it was visible at real icon size**: two geometry issues only
+    became obvious once Platter was actually wired up as the app icon. (1) The wink was crowding
+    the platter's top edge - moved down (face `translate(48 33)` → `translate(48 36)`, computed
+    for real clearance from both the platter edge and the spindle hub, not just eyeballed). (2)
+    The case itself wasn't vertically centered in the mark's own 96x96 space - its margins were
+    18px top / 10px bottom (an unintentional offset from when the case position was first chosen),
+    visibly off-center once cropped to a launcher icon even though it was barely noticeable in the
+    original exploration Artifact's square preview tiles. Recentered the whole composition (case,
+    screws, platter, arm, hub) around the viewBox's true center instead of just patching the
+    Android-specific transform, so the fix is at the source and stays correct everywhere the mark
+    is used. All five places that carry this mark's coordinates were updated together and re-
+    verified consistent: the exploration Artifact's `mark-platter` def, `branding/
+    undroaid-mark-platter.svg`, `ic_launcher_foreground.xml` (both the `drawable/` and
+    `mipmap-anydpi-v26/` copies, kept identical), and `ic_launcher_monochrome.xml`.
+  - **Themed/dynamic icon "doesn't show up" - verified this is a launcher setting, not a wiring
+    bug.** The user's test device runs Kvaesitso (a third-party launcher), Android 17/API 37 -
+    confirmed via `adb getprop` this is nowhere near the API 33 floor for Material You themed
+    icons, so that wasn't it either. Checked Kvaesitso's own docs
+    (kvaesitso.mm20.de/docs/user-guide/customization/themed-icons.html): it does support themed
+    icons and explicitly documents "if the drawable has a `<monochrome>` layer, this will be used"
+    - exactly what's wired up here - but it's an opt-in toggle in the launcher's own settings
+    (Settings → Grid & icons → Themed Icons), separate from Android's system-level toggle. Nothing
+    to fix on the app side; the user needs to enable it in Kvaesitso.
 - Home Server remains saved-but-not-wired - only Platter was asked to go live.
-
-## Suggested next steps, roughly in priority order
+- **App theme expanded into a full custom Material3 scheme** (`ui/theme/Color.kt`/`Theme.kt`),
+  not just used for the app icon. Built proper tonal ramps (10 stops each) for a primary hue
+  (forest green - `ForestInk`/`ForestPine` sit at tones 20/40 of the *same* ramp, not a
+  coincidence), a cooler secondary "moss" hue for variety, and the tertiary gold
+  (`ForestGold` used directly as the light-theme tertiary rather than a computed tone, so the
+  exact brand color shows up front and center - this is also the Docker/VMs "Paused" indicator
+  color). Neutral/neutral-variant ramps get a faint green-gray bias rather than pure gray, per the
+  same "considered neutral, not default" principle used when designing the branding Artifact
+  pages. `errorLight`/`errorDark` deliberately kept close to M3's standard red rather than forest-
+  tinted - errors need to read as unambiguously wrong at a glance. Every M3 color role is now
+  explicitly set (previously only a subset was - primary/secondary/tertiary/error/background/
+  surface/surfaceVariant/the custom surfaceContainer tiers - leaving `outline`, `scrim`,
+  `inverseSurface`, all the `*Fixed` roles, `surfaceDim`/`surfaceBright` etc. on M3's uncustomized
+  defaults).
+  - **Also flipped the app's default theme mode**: `Storage.useDynamicColor` and `AppTheme`'s own
+    `dynamicColor` parameter both defaulted to `true` (defer to the system's Android 12+
+    wallpaper-derived color on every device that supports it) - changed both defaults to `false`
+    so a fresh install actually shows the new forest theme rather than rarely surfacing it. Users
+    can still opt into dynamic color from Settings; existing installs with an already-stored
+    preference are unaffected either way (this only changes what *new* installs default to).
+    Fixed one stale bit of Settings copy in the same pass - the dynamic-color toggle's description
+    still said "Turn off to use the Unraid orange theme" (accurate before this session; wrong now
+    on two counts, both the color and the "off = fallback" framing).
+  - **Follow-up, same session**: the user noticed the wink's gold never actually showed up
+    anywhere in real app UI, and that the Dashboard's Memory metric card had lost the visual
+    distinction it used to have from the CPU card (both used to be different hues - blue vs. the
+    old Unraid orange's secondary pairing - but the new secondary "moss" green sits too close to
+    primary pine to tell the two cards apart at a glance). One fix solves both:
+    `SystemMetricsRow`'s Memory `MetricCard` now uses `colorScheme.tertiary` (gold) instead of
+    `colorScheme.secondary` (moss) - CPU stays pine green, Memory is now gold, and the brand's
+    signature accent color is visible on the very first screen instead of buried in the rarely-
+    seen Docker/VMs "Paused" dot. `colorScheme.secondary` is now unused in real app UI (only
+    referenced in `Theme.kt`'s own preview/demo composable) - not a problem, plenty of M3 apps
+    lean mainly on primary+tertiary and don't force secondary into service everywhere.
+  - **Follow-up, same session: audited every other "paused" indicator in the app for the same
+    gold convention and found it was applied inconsistently.**
+    - `VmsScreen.kt`'s `VmRunState.dotColor()` had its own hardcoded `Color(0xFFFFA726)` for
+      `PAUSED` - a different amber than the theme's actual gold, and not theme-aware at all (was a
+      plain non-`@Composable` function; made it `@Composable` so it can read
+      `MaterialTheme.colorScheme.tertiary` directly). Docker's equivalent dot (on the Dashboard's
+      mini widget) already used `colorScheme.tertiary` for the same state - this just brings VMs
+      in line with it.
+    - The Docker **tab's own** container list (`ContainerRow`/`ContainerInfoCard` in
+      `DockerScreen.kt`) never distinguished paused at all - its status dot was a plain
+      `isRunning ? green : error`, so a paused container showed the same red as a stopped one.
+      The Dashboard's mini Docker widget already got this right; the full tab's list didn't.
+      Both now branch on all three `DockerContainerState` values, matching the Dashboard widget.
+    - Parity check had no color cue for paused vs. running anywhere - both `MainScreen.kt`'s
+      `ParityCheckControls` and `DashboardScreen.kt`'s `ParityCheckBanner` now tint their
+      `LinearProgressIndicator` (and the Dashboard banner's percentage label) tertiary while
+      paused, primary while running.
+    - **Considered and explicitly declined**: using tertiary for the bold header icon
+      (`ScreenTitle`, every tab's leading icon) too. Gold's meaning up to this point is
+      specifically "paused/waiting" - making it the ambient color of every screen's chrome as
+      well would dilute that signal (a gold dot in a list means something; a gold header icon on
+      every single tab wouldn't mean anything in particular, just decoration) and doesn't fit the
+      brand mark's own logic either, where the header icon's role is closer to what ink/pine (the
+      case) represents, not the wink's accent. Headers stay on primary.
 
 1. **Server tab** (Connect identity) - lower priority per the monitoring-and-quick-actions
    product framing discussed this session; genuinely optional depending on how much you use

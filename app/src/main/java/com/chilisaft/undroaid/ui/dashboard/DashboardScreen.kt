@@ -228,6 +228,7 @@ private fun ParityCheckBanner(parityCheck: ParityCheckInfo, paritySizeKb: Long?)
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
         shape = RoundedCornerShape(spacing.mediumLarge)
     ) {
+        val accentColor = if (parityCheck.paused) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary
         Column(modifier = Modifier.padding(spacing.medium), verticalArrangement = Arrangement.spacedBy(spacing.extraSmall)) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text("Parity Check", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
@@ -235,12 +236,13 @@ private fun ParityCheckBanner(parityCheck: ParityCheckInfo, paritySizeKb: Long?)
                     "${parityCheck.progressPercent ?: 0}%",
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
+                    color = accentColor
                 )
             }
             LinearProgressIndicator(
                 progress = { (parityCheck.progressPercent ?: 0) / 100f },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                color = accentColor
             )
             Text(
                 text = buildString {
@@ -284,7 +286,7 @@ private fun SystemMetricsRow(metrics: SystemMetrics) {
             label = "MEMORY",
             percent = metrics.memoryLoadPercent,
             icon = Icons.Filled.Reorder,
-            color = MaterialTheme.colorScheme.secondary
+            color = MaterialTheme.colorScheme.tertiary
         )
     }
 }

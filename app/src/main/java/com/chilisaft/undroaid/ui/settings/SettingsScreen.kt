@@ -74,7 +74,7 @@ fun SettingsScreenContent(
                     Column(modifier = Modifier.weight(1f)) {
                         Text("Dynamic colors", style = MaterialTheme.typography.bodyLarge)
                         Text(
-                            "Match colors to your wallpaper (Android 12+). Turn off to use the Unraid orange theme.",
+                            "Match colors to your wallpaper (Android 12+). Off by default, using the app's own forest theme.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

@@ -9,16 +9,20 @@
     Wired up as the real Android adaptive-icon foreground - see
     app/src/main/res/mipmap-anydpi-v26/ic_launcher_foreground.xml (and the monochrome variant
     at app/src/main/res/drawable/ic_launcher_monochrome.xml) for the on-device versions.
+
+    Recentered so the case sits symmetrically in the 96x96 viewBox (was 18px top / 10px bottom -
+    an unintentional 4px vertical offset, visible once wired up as the actual app icon) and the
+    wink moved down off the platter's top edge, which it was crowding/touching.
   -->
-  <rect x="14" y="18" width="68" height="68" rx="12" fill="#16321F" />
-  <circle cx="23" cy="27" r="2.3" fill="#2F6B48" />
-  <circle cx="73" cy="27" r="2.3" fill="#2F6B48" />
-  <circle cx="23" cy="73" r="2.3" fill="#2F6B48" />
-  <circle cx="73" cy="73" r="2.3" fill="#2F6B48" />
-  <circle cx="48" cy="52" r="25" fill="#2F6B48" />
-  <path d="M73.10,62.74 L50.69,46.28 L49.31,47.72 L66.90,69.26 Z" fill="#16321F" />
-  <circle cx="70" cy="66" r="5" fill="#16321F" />
-  <circle cx="48" cy="52" r="6" fill="#16321F" />
-  <circle cx="39" cy="33" r="3.4" fill="#E3A94A" />
-  <rect x="51.2" y="31.4" width="7.6" height="3.2" rx="1.6" fill="#E3A94A" transform="rotate(-14 55 33)" />
+  <rect x="14" y="14" width="68" height="68" rx="12" fill="#16321F" />
+  <circle cx="23" cy="23" r="2.3" fill="#2F6B48" />
+  <circle cx="73" cy="23" r="2.3" fill="#2F6B48" />
+  <circle cx="23" cy="69" r="2.3" fill="#2F6B48" />
+  <circle cx="73" cy="69" r="2.3" fill="#2F6B48" />
+  <circle cx="48" cy="48" r="25" fill="#2F6B48" />
+  <path d="M73.10,58.74 L50.69,42.28 L49.31,43.72 L66.90,65.26 Z" fill="#16321F" />
+  <circle cx="70" cy="62" r="5" fill="#16321F" />
+  <circle cx="48" cy="48" r="6" fill="#16321F" />
+  <circle cx="39" cy="36" r="3.4" fill="#E3A94A" />
+  <rect x="51.2" y="34.4" width="7.6" height="3.2" rx="1.6" fill="#E3A94A" transform="rotate(-14 55 36)" />
 </svg>

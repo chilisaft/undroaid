@@ -475,7 +475,8 @@ private fun ParityCheckControls(
         if (isActive) {
             LinearProgressIndicator(
                 progress = { (parityCheck.progressPercent ?: 0) / 100f },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                color = if (parityCheck.paused) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary
             )
             Text(
                 buildString {

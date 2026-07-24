@@ -42,8 +42,12 @@ class Storage @Inject constructor(
         get() = preferences.getBoolean(KEY_SHOW_CORE_LIST, false)
         set(value) = preferences.edit() { putBoolean(KEY_SHOW_CORE_LIST, value) }
 
+    // Defaults to false so the app's own forest theme (see ui/theme/Color.kt) is what new
+    // installs actually see, rather than deferring to the system's wallpaper-derived Android 12+
+    // dynamic color on every device that supports it - users can still opt into dynamic color
+    // from Settings.
     var useDynamicColor: Boolean
-        get() = preferences.getBoolean(KEY_USE_DYNAMIC_COLOR, true)
+        get() = preferences.getBoolean(KEY_USE_DYNAMIC_COLOR, false)
         set(value) = preferences.edit() { putBoolean(KEY_USE_DYNAMIC_COLOR, value) }
 
     val uuid: String

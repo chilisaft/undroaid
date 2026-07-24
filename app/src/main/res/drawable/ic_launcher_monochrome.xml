@@ -7,10 +7,13 @@
     <!--
         Android re-tints this to a single system color for Material You "themed icons" - a solid
         recolor of the full multi-tone foreground would just merge every shape into one blob with
-        no visible structure, so this is deliberately simplified: the case and platter are drawn
-        as outlines (stroke only) rather than fills, while the small accents (hub, arm, the wink)
-        stay solid, giving the silhouette real structure even under a flat single-tone tint. The
-        source color used here doesn't matter - the OS overrides it - #000000 is just convention.
+        no visible structure. Mirrors the full-color mark's own two-tone split instead of
+        inventing a new visual language: ink (case/arm/hub) and gold (the wink) are the "solid"
+        tones there, while pine (platter/screws) is really just a second surface - so here the
+        case is one solid shape with the platter and the four screws punched out as real
+        transparent holes (evenOdd fill combining all of them in one path), and the arm/hub/wink
+        stay solid on top, floating in the cutout. The source color used here doesn't matter - the
+        OS overrides it - #000000 is just convention.
     -->
     <group
         android:scaleX="0.75"
@@ -18,34 +21,33 @@
         android:translateX="18"
         android:translateY="18">
         <path
-            android:fillColor="#00000000"
-            android:strokeColor="#000000"
-            android:strokeWidth="4"
-            android:pathData="M26,18 L70,18 A12,12 0 0 1 82,30 L82,74 A12,12 0 0 1 70,86 L26,86 A12,12 0 0 1 14,74 L14,30 A12,12 0 0 1 26,18 Z" />
-        <path
-            android:fillColor="#00000000"
-            android:strokeColor="#000000"
-            android:strokeWidth="3"
-            android:pathData="M23,52 A25,25 0 1 1 73,52 A25,25 0 1 1 23,52 Z" />
+            android:fillColor="#000000"
+            android:fillType="evenOdd"
+            android:pathData="M26,14 L70,14 A12,12 0 0 1 82,26 L82,70 A12,12 0 0 1 70,82 L26,82 A12,12 0 0 1 14,70 L14,26 A12,12 0 0 1 26,14 Z
+                               M23,48 A25,25 0 1 1 73,48 A25,25 0 1 1 23,48 Z
+                               M20.7,23 A2.3,2.3 0 1 1 25.3,23 A2.3,2.3 0 1 1 20.7,23 Z
+                               M70.7,23 A2.3,2.3 0 1 1 75.3,23 A2.3,2.3 0 1 1 70.7,23 Z
+                               M20.7,69 A2.3,2.3 0 1 1 25.3,69 A2.3,2.3 0 1 1 20.7,69 Z
+                               M70.7,69 A2.3,2.3 0 1 1 75.3,69 A2.3,2.3 0 1 1 70.7,69 Z" />
         <path
             android:fillColor="#000000"
-            android:pathData="M73.10,62.74 L50.69,46.28 L49.31,47.72 L66.90,69.26 Z" />
+            android:pathData="M73.10,58.74 L50.69,42.28 L49.31,43.72 L66.90,65.26 Z" />
         <path
             android:fillColor="#000000"
-            android:pathData="M65,66 A5,5 0 1 1 75,66 A5,5 0 1 1 65,66 Z" />
+            android:pathData="M65,62 A5,5 0 1 1 75,62 A5,5 0 1 1 65,62 Z" />
         <path
             android:fillColor="#000000"
-            android:pathData="M42,52 A6,6 0 1 1 54,52 A6,6 0 1 1 42,52 Z" />
+            android:pathData="M42,48 A6,6 0 1 1 54,48 A6,6 0 1 1 42,48 Z" />
         <path
             android:fillColor="#000000"
-            android:pathData="M35.6,33 A3.4,3.4 0 1 1 42.4,33 A3.4,3.4 0 1 1 35.6,33 Z" />
+            android:pathData="M35.6,36 A3.4,3.4 0 1 1 42.4,36 A3.4,3.4 0 1 1 35.6,36 Z" />
         <group
             android:pivotX="55"
-            android:pivotY="33"
+            android:pivotY="36"
             android:rotation="-14">
             <path
                 android:fillColor="#000000"
-                android:pathData="M52.8,31.4 L57.2,31.4 A1.6,1.6 0 0 1 57.2,34.6 L52.8,34.6 A1.6,1.6 0 0 1 52.8,31.4 Z" />
+                android:pathData="M52.8,34.4 L57.2,34.4 A1.6,1.6 0 0 1 57.2,37.6 L52.8,37.6 A1.6,1.6 0 0 1 52.8,34.4 Z" />
         </group>
     </group>
 </vector>

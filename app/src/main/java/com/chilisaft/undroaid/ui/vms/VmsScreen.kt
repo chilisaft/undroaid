@@ -136,9 +136,10 @@ fun VmsScreenContent(
     }
 }
 
+@Composable
 private fun VmRunState.dotColor(): Color = when (this) {
     VmRunState.RUNNING -> Color(0xFF4CAF50)
-    VmRunState.PAUSED -> Color(0xFFFFA726)
+    VmRunState.PAUSED -> MaterialTheme.colorScheme.tertiary
     VmRunState.STOPPED -> Color(0xFF9E9E9E)
 }
 

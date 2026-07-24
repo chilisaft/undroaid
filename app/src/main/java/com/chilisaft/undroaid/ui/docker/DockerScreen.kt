@@ -159,6 +159,11 @@ fun DockerScreenContent(
 private fun ContainerRow(container: DockerContainer, isActioning: Boolean, onClick: () -> Unit) {
     val spacing = MaterialTheme.spacing
     val isRunning = container.state == DockerContainerState.RUNNING
+    val statusDotColor = when (container.state) {
+        DockerContainerState.RUNNING -> Color(0xFF4CAF50)
+        DockerContainerState.PAUSED -> MaterialTheme.colorScheme.tertiary
+        DockerContainerState.EXITED -> MaterialTheme.colorScheme.error
+    }
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -185,10 +190,7 @@ private fun ContainerRow(container: DockerContainer, isActioning: Boolean, onCli
                     Box(
                         modifier = Modifier
                             .size(8.dp)
-                            .background(
-                                color = if (isRunning) Color(0xFF4CAF50) else MaterialTheme.colorScheme.error,
-                                shape = RoundedCornerShape(50)
-                            )
+                            .background(color = statusDotColor, shape = RoundedCornerShape(50))
                     )
                     Spacer(Modifier.width(spacing.extraSmall))
                     Text(
@@ -346,6 +348,11 @@ private fun LogLines(lines: List<DockerLogLine>) {
 private fun ContainerInfoCard(container: DockerContainer, modifier: Modifier = Modifier) {
     val spacing = MaterialTheme.spacing
     val isRunning = container.state == DockerContainerState.RUNNING
+    val statusDotColor = when (container.state) {
+        DockerContainerState.RUNNING -> Color(0xFF4CAF50)
+        DockerContainerState.PAUSED -> MaterialTheme.colorScheme.tertiary
+        DockerContainerState.EXITED -> MaterialTheme.colorScheme.error
+    }
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(spacing.mediumLarge),
@@ -377,10 +384,7 @@ private fun ContainerInfoCard(container: DockerContainer, modifier: Modifier = M
                     Box(
                         modifier = Modifier
                             .size(8.dp)
-                            .background(
-                                color = if (isRunning) Color(0xFF4CAF50) else MaterialTheme.colorScheme.error,
-                                shape = RoundedCornerShape(50)
-                            )
+                            .background(color = statusDotColor, shape = RoundedCornerShape(50))
                     )
                     Spacer(Modifier.width(spacing.extraSmall))
                     Text(
