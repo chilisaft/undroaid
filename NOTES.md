@@ -5,12 +5,13 @@ HTTP + a login-tested API key. MVVM + Hilt + Jetpack Compose. Intended use case 
 "Product direction" below): glance-and-act monitoring/quick-actions, not a full port of the
 desktop webUI.
 
-Last updated: 2026-07-23. Branch: `main` (pushed to `origin/main`).
+Last updated: 2026-07-24. Branch: `main` (pushed to `origin/main`, currently at `171b7d5`).
 
-**Session update (same day)**: Built out the Docker tab (see below) and did some git housekeeping -
-removed a leftover detached-HEAD worktree and 3 fully-merged duplicate branches, fixed a dangling
-`origin/HEAD`, and pushed 2 unpushed `main` commits. `origin/master` is confirmed gone (see
-"Repo/branch housekeeping" below).
+**Session update**: Built out the Docker tab (see below), including a Restart action and a
+container detail popup with icon/name/image/uptime. Also did git housekeeping - removed a
+leftover detached-HEAD worktree and 3 fully-merged duplicate branches, fixed a dangling
+`origin/HEAD`, pushed unpushed `main` commits, and untracked/gitignored `.idea/`. `origin/master`
+is confirmed gone (see "Repo/branch housekeeping" below).
 
 ## What's actually working
 
@@ -33,10 +34,11 @@ removed a leftover detached-HEAD worktree and 3 fully-merged duplicate branches,
   list via `DockerRepository.getContainers()` (`DockerContainersQuery`, richer than the Dashboard's
   summary query). Each row shows the container's real icon (`iconUrl`, loaded via Coil3
   `SubcomposeAsyncImage` at 52dp, falls back to a generic layers glyph when there's no icon or it
-  fails to load) plus name and running/stopped status - no image/tag text in the row anymore
-  (removed per user feedback, wasn't useful at a glance). Tapping a row opens a
-  `ModalBottomSheet`: a `ContainerInfoCard` at the top (bigger 56dp icon, name, status/uptime text)
-  followed by context-appropriate actions - **Restart** (new, RUNNING/PAUSED only),
+  fails to load) plus name and running/stopped status - no image/tag text in the row itself
+  (removed per user feedback, wasn't useful at a glance in the compact list). Tapping a row opens
+  a `ModalBottomSheet`: a `ContainerInfoCard` at the top (bigger 56dp icon, name, image/tag,
+  status/uptime text - the image line lives here now instead of the row) followed by
+  context-appropriate actions - **Restart** (new, RUNNING/PAUSED only),
   Pause/Resume, Stop, Start, plus "Open Web UI" when `webUiUrl` is set (launched via
   `LocalUriHandler`). Restart has no native mutation in the schema (only
   start/stop/pause/unpause/removeContainer/updateContainer(s)), so `DockerViewModel.restart()`
@@ -117,6 +119,11 @@ runtime on every launch (see git log). No Compose UI tests exist - previews only
   detached-HEAD worktree (`undroaid-android-review-def47e`) and 3 branches that were fully
   merged into `main` but never deleted, fixed a dangling `origin/HEAD` (now points at `main`),
   and pushed 2 commits that were sitting unpushed on local `main`.
+- `.idea/` is now untracked and fully gitignored (files stay on disk for the IDE, git just stops
+  following them) - it was already listed in `.gitignore` but 13 files had been committed before
+  that rule existed, so ignoring alone didn't stop `deploymentTargetSelector.xml` etc. from
+  showing as modified after routine IDE/adb activity. Also deduped `.gitignore`, which had
+  several entries listed twice from being appended to over time.
 
 ## Suggested next steps, roughly in priority order
 
