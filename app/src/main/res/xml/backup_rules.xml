@@ -1,11 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
     Auto Backup rules for Android 11 and lower (Android 12+ uses data_extraction_rules.xml).
-    The encrypted preferences file (server URL + API key) is excluded: its contents are encrypted
-    with a key held in this device's Android Keystore, which is never backed up. Restored onto a
-    new device the file can't be decrypted, and the app would crash on launch - the user just logs
-    in again instead. Plain preferences (theme etc.) are still backed up.
+    The credentials file (server URL + API key, secure_prefs.xml) is excluded: its contents are
+    encrypted with a key held in this device's Android Keystore, which is never backed up, so it
+    couldn't be decrypted on another device anyway - the user just logs in again there.
+    encrypted_prefs.xml is the pre-2026-10 credentials file (migrated away on first launch).
+    Plain preferences (theme etc.) are still backed up.
 -->
 <full-backup-content>
+    <exclude domain="sharedpref" path="secure_prefs.xml" />
     <exclude domain="sharedpref" path="encrypted_prefs.xml" />
 </full-backup-content>

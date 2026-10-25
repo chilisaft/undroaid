@@ -1,5 +1,8 @@
 package com.chilisaft.undroid.utils
 
+import android.content.Context
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.google.common.truth.Truth.assertThat
@@ -7,55 +10,90 @@ import org.junit.After
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
+import java.security.KeyStore
 
 /**
- * WARNING: runs inside the real app's process and storage - tearDown() clears the encrypted
- * preferences, i.e. it **logs the app out** on whatever device it runs on. Don't run it on a
- * device whose login you want to keep.
+ * Credential storage against the real Android Keystore. Uses its own key alias and file names
+ * throughout, so it's safe to run on a device with a real login - it never touches the app's
+ * actual credentials (unlike its predecessor, which cleared them in tearDown).
  */
 @RunWith(AndroidJUnit4::class)
 class PreferencesModuleTest {
 
-    private val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+    private val context = ApplicationProvider.getApplicationContext<Context>()
+
+    private fun testStore() = SecureStore(
+        context.getSharedPreferences(TEST_FILE, Context.MODE_PRIVATE),
+        KeystoreStringCipher(TEST_ALIAS)
+    )
 
     @After
     fun tearDown() {
-        PreferencesModule.provideEncryptedSharedPreferences(context).edit().clear().commit()
-        PreferencesModule.provideDefaultSharedPreferences(context).edit().clear().commit()
+        // commit() waits for any apply() still in flight, so the delete below can't be undone by a late write.
+        context.getSharedPreferences(TEST_FILE, Context.MODE_PRIVATE).edit().clear().commit()
+        context.deleteSharedPreferences(TEST_FILE)
+        context.deleteSharedPreferences(TEST_LEGACY_FILE)
+        KeyStore.getInstance("AndroidKeyStore").apply { load(null) }.deleteEntry(TEST_ALIAS)
+        PreferencesModule.provideDefaultSharedPreferences(context).edit().remove(TEST_DEFAULT_KEY).commit()
     }
 
     @Test
-    fun encryptedPreferences_roundTripsAValueThroughTheRealKeystore() {
-        val secret = "test-api-token-12345"
-        PreferencesModule.provideEncryptedSharedPreferences(context)
-            .edit().putString("api_token", secret).commit()
+    fun secureStore_roundTripsAValueThroughTheRealKeystore() {
+        testStore().putString("api_token", "test-api-token-12345")
 
-        // A fresh instance forces a real decrypt via the Android Keystore, not just an in-memory read.
-        val reread = PreferencesModule.provideEncryptedSharedPreferences(context)
-            .getString("api_token", null)
-
-        assertThat(reread).isEqualTo(secret)
+        // A fresh instance forces a real decrypt via the Android Keystore, not an in-memory read.
+        assertThat(testStore().getString("api_token")).isEqualTo("test-api-token-12345")
     }
 
     @Test
-    fun encryptedPreferences_storesCiphertextOnDisk_notThePlaintextValue() {
+    fun secureStore_storesCiphertextOnDisk_notThePlaintextValue() {
         val secret = "super-secret-value-should-not-appear-on-disk"
-        PreferencesModule.provideEncryptedSharedPreferences(context)
-            .edit().putString("api_token", secret).commit()
+        testStore().putString("api_token", secret)
 
-        val prefsFile = File(context.applicationInfo.dataDir, "shared_prefs/encrypted_prefs.xml")
-        assertThat(prefsFile.exists()).isTrue()
-        assertThat(prefsFile.readText()).doesNotContain(secret)
+        // SecureStore writes with apply() (asynchronous) - give the disk write a moment to land.
+        val file = File(context.applicationInfo.dataDir, "shared_prefs/$TEST_FILE.xml")
+        val deadline = System.currentTimeMillis() + 2_000
+        while (!file.exists() && System.currentTimeMillis() < deadline) Thread.sleep(50)
+        assertThat(file.exists()).isTrue()
+        assertThat(file.readText()).doesNotContain(secret)
+    }
+
+    @Test
+    fun keystoreCipher_usesAFreshIvEveryTime() {
+        val cipher = KeystoreStringCipher(TEST_ALIAS)
+
+        assertThat(cipher.encrypt("same")).isNotEqualTo(cipher.encrypt("same"))
+    }
+
+    @Test
+    fun migration_movesValuesOutOfTheLegacyFileAndDeletesIt() {
+        EncryptedSharedPreferences.create(
+            TEST_LEGACY_FILE,
+            MasterKey.DEFAULT_MASTER_KEY_ALIAS,
+            context,
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+        ).edit().putString("api_token", "legacy-key").putString("serverUrl", "http://192.168.1.10").commit()
+
+        val store = testStore()
+        migrateLegacyEncryptedPreferences(context, TEST_LEGACY_FILE, store, Storage.SECURE_KEYS)
+
+        assertThat(store.getString("api_token")).isEqualTo("legacy-key")
+        assertThat(store.getString("serverUrl")).isEqualTo("http://192.168.1.10")
+        assertThat(File(context.applicationInfo.dataDir, "shared_prefs/$TEST_LEGACY_FILE.xml").exists()).isFalse()
     }
 
     @Test
     fun defaultPreferences_roundTripsAValue() {
-        PreferencesModule.provideDefaultSharedPreferences(context)
-            .edit().putString("theme_test_key", "dark").commit()
+        PreferencesModule.provideDefaultSharedPreferences(context).edit().putString(TEST_DEFAULT_KEY, "dark").commit()
 
-        val reread = PreferencesModule.provideDefaultSharedPreferences(context)
-            .getString("theme_test_key", null)
+        assertThat(PreferencesModule.provideDefaultSharedPreferences(context).getString(TEST_DEFAULT_KEY, null)).isEqualTo("dark")
+    }
 
-        assertThat(reread).isEqualTo("dark")
+    private companion object {
+        const val TEST_FILE = "secure_prefs_instrumented_test"
+        const val TEST_LEGACY_FILE = "encrypted_prefs_instrumented_test"
+        const val TEST_ALIAS = "undroid_credentials_instrumented_test"
+        const val TEST_DEFAULT_KEY = "instrumented_test_key"
     }
 }

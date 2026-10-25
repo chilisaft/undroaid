@@ -44,15 +44,14 @@ class UnraidInterceptorTest {
     }
 
     @Test
-    fun `does not rewrite url when stored server url is blank`() {
+    fun `refuses to send the request when no server url is stored`() {
         every { storage.serverUrl } returns null
-        every { storage.apiToken } returns null
+        every { storage.apiToken } returns "secret-key"
 
-        server.enqueue(MockResponse())
-        val requestUrl = server.url("/graphql")
-        client.newCall(Request.Builder().url(requestUrl).build()).execute()
+        val result = runCatching { client.newCall(Request.Builder().url(server.url("/graphql")).build()).execute() }
 
-        assertThat(server.takeRequest().requestUrl).isEqualTo(requestUrl)
+        assertThat(result.exceptionOrNull()).isInstanceOf(InvalidServerUrlException::class.java)
+        assertThat(server.requestCount).isEqualTo(0)
     }
 
     @Test
@@ -85,22 +84,21 @@ class UnraidInterceptorTest {
     }
 
     @Test
-    fun `does not throw for an invalid stored server url, request proceeds unmodified`() {
-        // Unlike an invalid override, a bad *stored* URL is not treated as fatal by the
-        // interceptor - it silently leaves the original request untouched.
+    fun `refuses to send the request when the stored server url is invalid`() {
+        // Previously a bad *stored* URL silently left the request pointed at ApolloClient's
+        // placeholder URL - with the API key attached. It must fail instead.
         every { storage.serverUrl } returns "not a valid url"
-        every { storage.apiToken } returns null
+        every { storage.apiToken } returns "secret-key"
 
-        server.enqueue(MockResponse())
-        val requestUrl = server.url("/graphql")
-        client.newCall(Request.Builder().url(requestUrl).build()).execute()
+        val result = runCatching { client.newCall(Request.Builder().url(server.url("/graphql")).build()).execute() }
 
-        assertThat(server.takeRequest().requestUrl).isEqualTo(requestUrl)
+        assertThat(result.exceptionOrNull()).isInstanceOf(InvalidServerUrlException::class.java)
+        assertThat(server.requestCount).isEqualTo(0)
     }
 
     @Test
     fun `adds api key header from storage`() {
-        every { storage.serverUrl } returns null
+        every { storage.serverUrl } returns server.url("/").toString()
         every { storage.apiToken } returns "test-api-token"
 
         server.enqueue(MockResponse())
@@ -111,7 +109,7 @@ class UnraidInterceptorTest {
 
     @Test
     fun `does not add api key header when storage token is null`() {
-        every { storage.serverUrl } returns null
+        every { storage.serverUrl } returns server.url("/").toString()
         every { storage.apiToken } returns null
 
         server.enqueue(MockResponse())
@@ -122,7 +120,7 @@ class UnraidInterceptorTest {
 
     @Test
     fun `X-API-KEY-OVERRIDE header overrides stored token and is stripped`() {
-        every { storage.serverUrl } returns null
+        every { storage.serverUrl } returns server.url("/").toString()
         every { storage.apiToken } returns "stored-token"
 
         server.enqueue(MockResponse())

@@ -1,5 +1,6 @@
 package com.chilisaft.undroid.data.api
 
+import com.apollographql.apollo.api.http.HttpHeader
 import com.apollographql.apollo.exception.ApolloHttpException
 import com.apollographql.apollo.exception.ApolloNetworkException
 import com.apollographql.apollo.exception.JsonDataException
@@ -35,5 +36,19 @@ class ApiErrorMessagesTest {
     @Test
     fun `anything else is an unexpected response`() {
         assertThat(JsonDataException("bad json").toUserMessage()).isEqualTo("Unexpected response from the server")
+    }
+
+    @Test
+    fun `plain http to a non-local server explains the restriction`() {
+        val error = ApolloNetworkException("Failed to execute GraphQL http network request", InsecureConnectionException("unraid.example.com"))
+
+        assertThat(error.toUserMessage()).isEqualTo("Plain http:// only works on your local network - use the server's https:// address")
+    }
+
+    @Test
+    fun `a redirect names where it points, since the app no longer follows it`() {
+        val error = ApolloHttpException(301, listOf(HttpHeader("Location", "https://tower.example.myunraid.net/graphql")), null, "moved")
+
+        assertThat(error.toUserMessage()).isEqualTo("The server redirects to https://tower.example.myunraid.net/graphql - use that address instead")
     }
 }

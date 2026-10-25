@@ -27,7 +27,13 @@ class StorageTest {
         every { defaultPrefs.edit() } returns defaultEditor
         every { encryptedPrefs.edit() } returns encryptedEditor
 
-        storage = Storage(defaultPrefs, encryptedPrefs)
+        // Pass-through cipher: the Keystore isn't available on the JVM, and what's verified here is
+        // which file each value goes to (SecureStore's own encryption is tested separately).
+        val passThrough = object : StringCipher {
+            override fun encrypt(plaintext: String) = plaintext
+            override fun decrypt(ciphertext: String) = ciphertext
+        }
+        storage = Storage(defaultPrefs, SecureStore(encryptedPrefs, passThrough))
     }
 
     @Test

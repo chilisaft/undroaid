@@ -89,6 +89,18 @@ Full analysis: NOTES.md → "Deferred: Show core devices".
 
 ---
 
+## 4. Drop the deprecated security-crypto dependency
+
+Credentials moved to the app's own Keystore AES-GCM store (`utils/SecureStore.kt`) on 2026-10-25.
+`androidx.security:security-crypto` is now only used by `migrateLegacyEncryptedPreferences()` to
+read the old `encrypted_prefs` file once, on the first launch after updating.
+
+- [ ] Once every install has launched a post-2026-10-25 build (for a single-user app: now - the
+      developer's phone migrated on 2026-10-25), delete `migrateLegacyEncryptedPreferences()`, its
+      instrumented test, the `encrypted_prefs.xml` backup exclusions, and the dependency itself.
+
+---
+
 ## Blocked by the Unraid API (not buildable client-side yet)
 
 These were requested but the API has no way to do them. Don't add disabled placeholder buttons -

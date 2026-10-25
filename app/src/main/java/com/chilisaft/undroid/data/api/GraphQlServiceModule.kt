@@ -22,6 +22,12 @@ object GraphQlServiceModule {
     ): OkHttpClient {
         return OkHttpClient.Builder()
             .addInterceptor(unraidInterceptor)
+            .addNetworkInterceptor(CleartextGuardInterceptor())
+            // The API key is a custom header, which OkHttp keeps on redirects - even cross-host or
+            // https -> http ones (it only strips `Authorization`). The GraphQL endpoint never needs
+            // to redirect, so don't follow any: a redirect surfaces as an error naming its target.
+            .followRedirects(false)
+            .followSslRedirects(false)
             .build()
     }
 

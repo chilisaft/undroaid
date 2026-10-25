@@ -314,6 +314,30 @@ Card containers were barely visible against their screen background - see below.
 - The encrypted credentials file is excluded from backup/device transfer (its Keystore key can't
   move devices), and an undecryptable file is reset instead of crashing on launch.
 
+## Security model (review 2026-10-25)
+
+- **Where the API key may go**: only to the configured server. The OkHttpClient doesn't follow
+  redirects (`followRedirects(false)`) - OkHttp keeps custom headers like `X-API-KEY` across
+  cross-host and https->http redirects, so a redirect is reported as an error naming its target
+  instead. `UnraidInterceptor` fails the request when there's no usable server URL (it used to fall
+  through to Apollo's placeholder URL, key attached). Both covered by `ApiKeyExposureTest`.
+- **Plain HTTP only on private networks** (`CleartextGuardInterceptor`, a *network* interceptor):
+  judged by the IP actually connected to - loopback, RFC 1918, link-local, CGNAT 100.64/10
+  (Tailscale) and IPv6 ULA are allowed; anything else needs https. So `http://name` works when the
+  name resolves to a LAN address. `usesCleartextTraffic` stays true because a network security
+  config can't express IP ranges.
+- **Credentials at rest**: `SecureStore` (AES-256-GCM, key in the Android Keystore under
+  `undroid_credentials`, random IV per value) in `secure_prefs.xml`, excluded from backup/transfer.
+  Replaced the deprecated EncryptedSharedPreferences; the old file is migrated once and deleted
+  (see TODO.md #4 for removing the migration). `PreferencesModuleTest` uses its own alias/files and
+  is now safe to run on a device with a real login.
+- Login screen sets `FLAG_SECURE` (the key can be shown in plain text there). Links from servers
+  only open if they're http(s) (`tryOpenUri`). Only the INTERNET permission is declared.
+- Not issues, checked: no request/token logging anywhere; no secret fields queried (`me` returns
+  only the key's name/roles; `Server.apikey` deliberately never selected); only the launcher
+  activity is exported; release builds are minified and not debuggable. Container icons load
+  through Coil's own client without the API key (the icon host sees the phone's IP - accepted).
+
 ## Data-layer conventions (2026-10-25)
 
 - Mappings shared between repositories live once in `data/repository/GraphQlMappers.kt` (array
@@ -326,8 +350,7 @@ Card containers were barely visible against their screen background - see below.
   - "Can't reach the server…", "The server rejected the API key", etc. - for widget errors, the
   failure Snackbar and the login form. Server-written GraphQL error messages pass through as-is.
 - `PreferencesModule` (formerly an `object SharedPreferences` that shadowed Android's type) provides
-  both preference files. Its instrumented test **clears the encrypted prefs, i.e. logs the app out**
-  - don't run it on a device whose login you want to keep.
+  the default preferences and the `SecureStore`.
 - The window theme is `Theme.Undroid` (platform Material, light + `values-night`), no AppCompat.
 
 ## UI design system (2026-10-25)

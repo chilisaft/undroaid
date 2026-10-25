@@ -15,13 +15,16 @@ class InvalidServerUrlException(url: String) : IOException("Invalid Server URL: 
  * error) aren't covered here - their server-written message is passed through as-is.
  */
 fun ApolloException.toUserMessage(): String = when (this) {
-    is ApolloNetworkException ->
-        if (causes().any { it is InvalidServerUrlException }) {
-            "That doesn't look like a valid server URL"
-        } else {
-            "Can't reach the server - check the server URL and your connection"
-        }
+    is ApolloNetworkException -> when {
+        causes().any { it is InvalidServerUrlException } -> "That doesn't look like a valid server URL"
+        causes().any { it is InsecureConnectionException } ->
+            "Plain http:// only works on your local network - use the server's https:// address"
+        else -> "Can't reach the server - check the server URL and your connection"
+    }
     is ApolloHttpException -> when (statusCode) {
+        in 300..399 -> headers.firstOrNull { it.name.equals("Location", ignoreCase = true) }?.value
+            ?.let { "The server redirects to $it - use that address instead" }
+            ?: "The server answered with a redirect - check the server URL"
         401 -> "The server rejected the API key"
         403 -> "Your API key doesn't have permission for this"
         404 -> "No Unraid API found at this address - check the server URL"

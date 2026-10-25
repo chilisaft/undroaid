@@ -1,6 +1,8 @@
 package com.chilisaft.undroid.ui.login
 
 import android.content.res.Configuration
+import android.view.WindowManager
+import androidx.activity.compose.LocalActivity
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -43,6 +45,14 @@ import com.chilisaft.undroid.ui.theme.spacing
 fun LoginScreen(onLoginSuccessful: () -> Unit) {
     val viewModel: LoginViewModel = hiltViewModel()
     val uiState by viewModel.uiState.collectAsState()
+
+    // The API key can be shown in plain text here (the eye toggle) - keep it out of screenshots,
+    // screen recordings and the recent-apps thumbnail while this screen is up.
+    val activity = LocalActivity.current
+    DisposableEffect(activity) {
+        activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        onDispose { activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE) }
+    }
 
     LoginContent(
         uiState = uiState,
@@ -274,7 +284,7 @@ private fun ApiKeyHelpSection() {
                 val steps = listOf(
                     "Open your Unraid server's webUI and go to Settings → Management Access → API Keys.",
                     "Create a new API key, give it a name, and choose which roles it should have.",
-                    "\"Admin\" grants this app full access to every feature; pick a narrower role if you'd rather limit what it can do.",
+                    "Give it only the access you need: \"Viewer\" is enough to monitor; starting or stopping containers, VMs or the array needs \"Admin\" (or custom permissions). Anything the key can't access just shows a lock.",
                     "Copy the generated key and paste it above, along with your server's URL."
                 )
                 steps.forEachIndexed { index, step ->

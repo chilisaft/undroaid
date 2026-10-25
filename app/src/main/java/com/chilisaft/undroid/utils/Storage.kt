@@ -9,23 +9,18 @@ import androidx.core.content.edit
 @Singleton
 class Storage @Inject constructor(
     @DefaultPreferences defaultSharedPreferences: SharedPreferences,
-    @EncryptedPreferences encryptedSharedPreferences: SharedPreferences
+    private val secureStore: SecureStore
 ) {
 
     private val preferences: SharedPreferences = defaultSharedPreferences
-    private val securePreferences: SharedPreferences = encryptedSharedPreferences
 
     var apiToken: String?
-        get() = securePreferences.getString(KEY_API_TOKEN, null)
-        set(value) {
-            securePreferences.edit() { putString(KEY_API_TOKEN, value) }
-        }
+        get() = secureStore.getString(KEY_API_TOKEN)
+        set(value) = secureStore.putString(KEY_API_TOKEN, value)
 
     var serverUrl: String?
-        get() = securePreferences.getString(KEY_SERVER_URL, null)
-        set(value) {
-            securePreferences.edit() { putString(KEY_SERVER_URL, value) }
-        }
+        get() = secureStore.getString(KEY_SERVER_URL)
+        set(value) = secureStore.putString(KEY_SERVER_URL, value)
 
     var themeMode: ThemeMode
         get() = preferences.getString(KEY_THEME_MODE, null)?.let { stored ->
@@ -46,6 +41,8 @@ class Storage @Inject constructor(
         set(value) = preferences.edit() { putBoolean(KEY_USE_DYNAMIC_COLOR, value) }
 
     companion object {
+        /** Everything kept in the [SecureStore] - what the legacy-file migration copies over. */
+        val SECURE_KEYS = listOf(KEY_API_TOKEN, KEY_SERVER_URL)
 
         private const val KEY_API_TOKEN = "api_token"
         private const val KEY_SERVER_URL = "serverUrl"

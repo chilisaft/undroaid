@@ -19,16 +19,11 @@ class UnraidInterceptor @Inject constructor(private val storage: Storage) : Inte
         val rawServerUrl = (overrideUrl ?: storage.serverUrl)
         builder.removeHeader("X-Server-Url")
 
-        if (!rawServerUrl.isNullOrBlank()) {
-            val sanitizedUrl = rawServerUrl.sanitizeUnraidUrl()
-            val newUrl = sanitizedUrl.toHttpUrlOrNull()
-
-            if (newUrl != null) {
-                builder.url(newUrl)
-            } else if (overrideUrl != null) {
-                throw InvalidServerUrlException(sanitizedUrl)
-            }
-        }
+        // No usable server URL means the request must not go out at all - previously it silently
+        // fell through to ApolloClient's placeholder URL, still carrying the API key.
+        if (rawServerUrl.isNullOrBlank()) throw InvalidServerUrlException("(none)")
+        val sanitizedUrl = rawServerUrl.sanitizeUnraidUrl()
+        builder.url(sanitizedUrl.toHttpUrlOrNull() ?: throw InvalidServerUrlException(sanitizedUrl))
 
         // 2. Handle API Key Override or from Storage
         val overrideToken = originalRequest.header("X-API-KEY-OVERRIDE")
