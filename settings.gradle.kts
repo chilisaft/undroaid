@@ -22,6 +22,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Undroaid"
+rootProject.name = "Undroid"
 include(":app")
  

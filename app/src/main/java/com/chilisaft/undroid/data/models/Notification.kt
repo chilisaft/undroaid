@@ -1,0 +1,14 @@
+package com.chilisaft.undroid.data.models
+
+data class Notification(
+    val id: String,
+    val title: String,
+    val subject: String,
+    val description: String,
+    val level: NotificationLevel,
+    val timestamp: String?
+)
+
+enum class NotificationLevel {
+    INFO, WARNING, ALERT
+}

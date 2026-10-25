@@ -1,4 +1,4 @@
-# Undroaid — project notes
+# Undroid — project notes
 
 Android companion app for Unraid, talking to the Unraid GraphQL API (Apollo Kotlin) over
 HTTP + a login-tested API key. MVVM + Hilt + Jetpack Compose. Intended use case (see
@@ -61,17 +61,17 @@ Card containers were barely visible against their screen background - see below.
   as of now. Deliberately just this one official link, not a custom-written full guide - "now is
   not the time to build those" per the user.
 - **No more login-screen flash on relaunch** (`graphs/AppStartupViewModel.kt`,
-  `UndroaidActivity.kt`, `res/values/themes.xml`). Previously `RootNavGraph` always started at
+  `UndroidActivity.kt`, `res/values/themes.xml`). Previously `RootNavGraph` always started at
   `AUTH_ROUTE`, so on every cold start the login form rendered and was fully visible for however
   long the auto-login's network validation took, before `LoginScreen` navigated away once it
   resolved - a real, if brief, flash for anyone with a saved session. Fixed the industry-standard
-  way: `androidx.core:core-splashscreen` (`Theme.Undroaid.Starting` in `themes.xml`, applied to
+  way: `androidx.core:core-splashscreen` (`Theme.Undroid.Starting` in `themes.xml`, applied to
   the activity in the manifest, `postSplashScreenTheme` swaps back to the original
   `Theme.AppCompat`) holds the OS splash on screen via
   `splashScreen.setKeepOnScreenCondition { appStartupViewModel.state.value is Loading }` while a
   new `AppStartupViewModel` makes the routing decision - instantly if there's no saved session
   (nothing to check), or after one background validation call if there is. `RootNavGraph`'s
-  `startDestination` is then set directly to the correct route (`UNDROAID_ROUTE` or `AUTH_ROUTE`)
+  `startDestination` is then set directly to the correct route (`UNDROID_ROUTE` or `AUTH_ROUTE`)
   before anything is ever composed, instead of always starting at login and navigating away after
   the fact. Deliberately does **not** touch `LoginViewModel`/`LoginScreen` at all - if the saved
   session's token turns out to be invalid, we still land on `AUTH_ROUTE` and `LoginScreen` mounts
@@ -186,7 +186,7 @@ Card containers were barely visible against their screen background - see below.
   system already computes a coherent full tonal palette from the wallpaper.
 - **Account menu** (`ui/usermenu`) — round account icon in the top bar of **every bottom-nav tab**
   (Dashboard - right of the bell; Main, Docker, VMs - each has its own `onUserClick` param wired
-  to the same `showUserSheet` state in `UndroaidNavGraph.kt`, so there's exactly one sheet
+  to the same `showUserSheet` state in `UndroidNavGraph.kt`, so there's exactly one sheet
   instance regardless of which tab opened it), per user feedback that this should be available
   everywhere, not just Dashboard. Building this out is also why `VmsScreen.kt` went from a bare
   `Text` stub to a real `Scaffold`/`TopAppBar` shell (still just placeholder body content -
@@ -214,7 +214,7 @@ Card containers were barely visible against their screen background - see below.
   the moment of a fetch**; a check that starts while the user is already sitting on an idle Main
   tab is never noticed, since nothing re-fetches on
   its own. Compounded by the bottom nav's `saveState`/`restoreState` navigation (`
-  UndroaidNavGraph.kt`) - switching tabs away and back does NOT recreate `MainViewModel` or
+  UndroidNavGraph.kt`) - switching tabs away and back does NOT recreate `MainViewModel` or
   re-trigger its `init` fetch, it restores the same already-fetched state. Net effect: before this
   session's fix, there was no way to get a fresh look at parity check status short of killing the
   app - a real bug the user hit (parity check actually running server-side, screen stuck showing
@@ -289,7 +289,7 @@ Card containers were barely visible against their screen background - see below.
      above the `DeviceGroupCard`, not inside it - dropped the badge and device count entirely.
      `DeviceGroupCard` lost its `header` slot as a result (was only ever used for this one case, so
      kept as dead flexibility would have been premature).
-- **Navigation** (`graphs/UndroaidNavGraph.kt`) — bottom nav: Dashboard, Main, Docker, VMs.
+- **Navigation** (`graphs/UndroidNavGraph.kt`) — bottom nav: Dashboard, Main, Docker, VMs.
   A 5th "More" item opens a `ModalBottomSheet` with just Shares and Server now (Settings moved
   to the account menu above). Bottom bar hides itself on drill-in screens
   (Settings/Notifications/Shares/Server), which have their own back button instead.
@@ -514,7 +514,7 @@ runtime on every launch (see git log). No Compose UI tests exist - previews only
   confirmed deleted on GitHub as of this session's `git fetch --prune` - the default-branch
   switch + old-branch deletion is done, nothing left to do here.
 - This session also cleaned up local git clutter left over from prior sessions: removed a
-  detached-HEAD worktree (`undroaid-android-review-def47e`) and 3 branches that were fully
+  detached-HEAD worktree (`undroid-android-review-def47e`) and 3 branches that were fully
   merged into `main` but never deleted, fixed a dangling `origin/HEAD` (now points at `main`),
   and pushed 2 commits that were sitting unpushed on local `main`.
 - `.idea/` is now untracked and fully gitignored (files stay on disk for the IDE, git just stops
@@ -537,9 +537,9 @@ actually designed.
   `#EEF2EA` paper. Confirmed by the user, stable across every round.
 - **Two directions approved and saved** as standalone SVGs at the repo root (literal hex colors,
   not the artifact's CSS custom properties, so they survive independent of the Artifact page):
-  - `branding/undroaid-mark-home-server.svg` - a literal "home server" pun: a conventional
+  - `branding/undroid-mark-home-server.svg` - a literal "home server" pun: a conventional
     rounded-corner gable roof over a chassis, bay-slit siding, the wink where a window would sit.
-  - `branding/undroaid-mark-platter.svg` - a top-down hard drive: rounded case, corner screws,
+  - `branding/undroid-mark-platter.svg` - a top-down hard drive: rounded case, corner screws,
     spindle hub, and a tapered actuator arm (thick at the pivot, thin at the head) entering
     diagonally from a side pivot - case/platter/hub/face all share one vertical axis of symmetry,
     with the arm as the one deliberate diagonal against that symmetric frame. Went through several
@@ -600,7 +600,7 @@ actually designed.
     Android-specific transform, so the fix is at the source and stays correct everywhere the mark
     is used. All five places that carry this mark's coordinates were updated together and re-
     verified consistent: the exploration Artifact's `mark-platter` def, `branding/
-    undroaid-mark-platter.svg`, `ic_launcher_foreground.xml` (both the `drawable/` and
+    undroid-mark-platter.svg`, `ic_launcher_foreground.xml` (both the `drawable/` and
     `mipmap-anydpi-v26/` copies, kept identical), and `ic_launcher_monochrome.xml`.
   - **Themed/dynamic icon "doesn't show up" - verified this is a launcher setting, not a wiring
     bug.** The user's test device runs Kvaesitso (a third-party launcher), Android 17/API 37 -

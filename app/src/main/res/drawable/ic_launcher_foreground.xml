@@ -5,7 +5,7 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
     <!--
-        The "Platter, centered" mark - see branding/undroaid-mark-platter.svg for the source and
+        The "Platter, centered" mark - see branding/undroid-mark-platter.svg for the source and
         palette notes. Scaled 0.75x and centered (translate 18,18) from its native 96x96 space so
         every shape stays within the adaptive-icon safe zone regardless of launcher mask shape.
     -->

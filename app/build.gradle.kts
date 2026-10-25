@@ -17,17 +17,17 @@ allOpen {
 }
 
 extensions.configure<ApplicationExtension> {
-    namespace = "com.chilisaft.undroaid"
+    namespace = "com.chilisaft.undroid"
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "com.chilisaft.undroaid"
+        applicationId = "com.chilisaft.undroid"
         minSdk = 28
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
 
-        testInstrumentationRunner = "com.chilisaft.undroaid.HiltTestRunner"
+        testInstrumentationRunner = "com.chilisaft.undroid.HiltTestRunner"
     }
 
     buildTypes {
@@ -151,7 +151,7 @@ dependencies {
 
 apollo {
     service("service") {
-        packageName.set("com.chilisaft.undroaid.graphql")
+        packageName.set("com.chilisaft.undroid.graphql")
         mapScalar("PrefixedID", "kotlin.String")
         mapScalar("DateTime", "kotlin.String")
         mapScalar("BigInt", "kotlin.String")
