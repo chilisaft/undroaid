@@ -11,37 +11,26 @@ load/error/permission states, `StatusLine` + `StatusTone` for any state indicato
 
 ---
 
-## 1. Shares screen
+## 1. Shares screen - built 2026-10-25
 
-**Where:** More tab → Shares (`ui/shares/SharesScreen.kt`, route `shares`). Currently a
-"coming soon" placeholder.
+More tab -> Shares: read-only list of user shares (`SharesQuery` -> `SharesRepository` ->
+`SharesViewModel` -> `SharesScreen`), sorted by name, each with its comment, free space, and its
+own size when Unraid has computed it. Needs the SHARE permission (otherwise the lock placeholder).
 
-**Goal:** a read-only list of user shares - glanceable size/usage, not share management.
-Creating/editing shares (allocation method, split level, include/exclude disks, SMB/NFS export
-settings) is desktop-webUI territory and out of scope.
+Checked against a real server (Unraid 7.3.3), which corrected the first version:
+- `Share.used`/`free` describe the *storage the share lives on* - every cache-pool share reported the
+  pool's numbers, every array share the array's - so a per-share usage bar was misleading. Only
+  free space is shown ("space available to this share").
+- `Share.size` was 0 for every share (Unraid computes it lazily), so "in share" only appears when set.
+- `Share.cache` was false even for shares that clearly live on the cache pool - not used.
 
-**Data:** root query `shares: [Share!]!` - needs the API key's `SHARE` resource permission.
-Useful `Share` fields (`schema.graphqls`, `type Share`):
-
-| Field | Use |
-|---|---|
-| `id`, `name`, `comment` | row title / subtitle |
-| `size`, `used`, `free` (KB, `BigInt` → mapped to `String`) | usage line + bar, via `kilobytesToHumanReadable()` |
-| `cache` | "uses cache pool" hint |
-| `include` / `exclude` | which disks the share spans (detail sheet, if any) |
-| `luksStatus` | encryption hint |
-
-**To do:**
-- [ ] `SharesQuery.graphql` with the fields above
-- [ ] `ShareInfo` model + `SharesRepository.getShares(): WidgetResult<List<ShareInfo>>` (via `runWidgetQuery`, same as the other repositories)
-- [ ] `SharesViewModel` (load + pull-to-refresh, same shape as `VmsViewModel` minus actions)
-- [ ] `SharesScreen`: `DetailTopBar` + `PullToRefreshBox` + `WidgetSection` + `ScreenList` of `AppCard` rows (name, comment, "used / size" with a usage bar)
-- [ ] Empty state ("No shares found") and permission-denied state (handled by `WidgetSection`)
-- [ ] Repository + ViewModel unit tests (same patterns as `VmRepositoryTest`/`VmsViewModelTest`)
-- [ ] Verify against a real server what `size` reports for shares (it may be 0/unset for some share types - Unraid computes share size lazily)
-
-**Open questions:** tap action (detail sheet with include/exclude disks, or nothing)? Should the
-Dashboard get a shares summary? Probably not - keep the Dashboard to glance-and-act.
+Possible follow-ups:
+- [ ] Show where a share lives (cache pool vs array). The API has no direct field; `include`/`exclude`
+      list disks, and matching `free` against Main's pool/array numbers is a heuristic - only if worth it.
+- [ ] `Share.color` (Unraid's protection indicator) and `Share.luksStatus` (encryption) - check their
+      real values against a server, then show them as a `StatusLine` / "encrypted" hint.
+- [ ] Tap a share for details (include/exclude disks, split level, allocator)? Only if wanted -
+      still read-only.
 
 ---
 

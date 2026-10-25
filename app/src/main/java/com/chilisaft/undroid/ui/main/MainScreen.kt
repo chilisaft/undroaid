@@ -2,7 +2,6 @@ package com.chilisaft.undroid.ui.main
 
 import android.content.res.Configuration
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -41,6 +40,7 @@ import com.chilisaft.undroid.ui.components.ScreenList
 import com.chilisaft.undroid.ui.components.SectionHeader
 import com.chilisaft.undroid.ui.components.StatusDot
 import com.chilisaft.undroid.ui.components.TabTopBar
+import com.chilisaft.undroid.ui.components.TagChip
 import com.chilisaft.undroid.ui.components.WidgetSection
 import com.chilisaft.undroid.ui.theme.StatusTone
 import com.chilisaft.undroid.ui.theme.AppTheme
@@ -355,14 +355,7 @@ private fun RoleBadge(role: ArrayDeviceRole) {
         ArrayDeviceRole.FLASH -> "FLASH"
         ArrayDeviceRole.CACHE -> "CACHE"
     }
-    Surface(color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f), shape = CircleShape) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(horizontal = MaterialTheme.spacing.small, vertical = 2.dp)
-        )
-    }
+    TagChip(label)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

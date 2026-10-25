@@ -289,7 +289,7 @@ Card containers were barely visible against their screen background - see below.
      `DeviceGroupCard` lost its `header` slot as a result (was only ever used for this one case, so
      kept as dead flexibility would have been premature).
 - **Navigation** (`graphs/UndroidNavGraph.kt`) — bottom nav: Dashboard, Main, Docker, VMs.
-  A 5th "More" item opens an `ActionSheet` with Shares and Server (both pending - see
+  A 5th "More" item opens an `ActionSheet` with Shares (built) and Server (pending - see
   [TODO.md](TODO.md)). Settings is in the account menu. Bottom bar hides itself on drill-in screens
   (Settings/Notifications/Shares/Server), which have their own back button instead.
 
@@ -390,8 +390,8 @@ copy-pasted variants. New screens should use these rather than hand-rolling a `C
 - **Login** uses the brand identity: `BrandMark` (the launcher icon's own background color +
   foreground vector, so it can't drift from the home-screen icon), "Undroid" title, theme shapes
   for the fields/button, and it scrolls/pads for the keyboard instead of a fixed 150dp top gap.
-- **Pending features**: Shares and Server stay reachable from the "More" tab but show an
-  `EmptyState` "coming soon" message instead of raw placeholder text. Settings' "Show core
+- **Pending features**: Server stays reachable from the "More" tab but shows an `EmptyState`
+  "coming soon" message instead of raw placeholder text (Shares was built since). Settings' "Show core
   devices" switch is hidden (the feature is deferred; the setting still persists). What's left to
   build for all three is tracked in [TODO.md](TODO.md).
 
@@ -400,8 +400,8 @@ copy-pasted variants. New screens should use these rather than hand-rolling a `C
 These exist as routes/nav destinations with a "coming soon" placeholder only, no real
 functionality. The implementation plan for each is in [TODO.md](TODO.md).
 
-- **Shares** (`ui/shares/SharesScreen.kt`) — share list at minimum; full share
-  creation/editing is probably desktop-webUI territory, not phone territory.
+(Shares was built on 2026-10-25 - see TODO.md #1 for what it shows and its follow-ups.)
+
 - **Server** (`ui/server/ServerScreen.kt`) — was going to show Unraid Connect identity
   (owner, guid, WAN/LAN IP, remote URL). The original query for this
   (`ServerInformationQuery`) was deleted when the Dashboard moved off it, since nothing else

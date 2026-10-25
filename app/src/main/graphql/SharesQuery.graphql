@@ -1,0 +1,9 @@
+query SharesQuery {
+    shares {
+        id
+        name
+        comment
+        free
+        size
+    }
+}
