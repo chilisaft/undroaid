@@ -289,8 +289,8 @@ Card containers were barely visible against their screen background - see below.
      `DeviceGroupCard` lost its `header` slot as a result (was only ever used for this one case, so
      kept as dead flexibility would have been premature).
 - **Navigation** (`graphs/UndroidNavGraph.kt`) — bottom nav: Dashboard, Main, Docker, VMs.
-  A 5th "More" item opens an `ActionSheet` with Shares (built) and Server (pending - see
-  [TODO.md](TODO.md)). Settings is in the account menu. Bottom bar hides itself on drill-in screens
+  A 5th "More" item opens an `ActionSheet` with Shares and Server (both built - see
+  [TODO.md](TODO.md) #1/#2 for what they show). Settings is in the account menu. Bottom bar hides itself on drill-in screens
   (Settings/Notifications/Shares/Server), which have their own back button instead.
 
 ## Screen visibility & polling (2026-10-25)
@@ -390,8 +390,8 @@ copy-pasted variants. New screens should use these rather than hand-rolling a `C
 - **Login** uses the brand identity: `BrandMark` (the launcher icon's own background color +
   foreground vector, so it can't drift from the home-screen icon), "Undroid" title, theme shapes
   for the fields/button, and it scrolls/pads for the keyboard instead of a fixed 150dp top gap.
-- **Pending features**: Server stays reachable from the "More" tab but shows an `EmptyState`
-  "coming soon" message instead of raw placeholder text (Shares was built since). Settings' "Show core
+- **Pending features**: tracked in [TODO.md](TODO.md). (Shares and Server were "coming soon"
+  placeholders for a while; both have since been built.) Settings' "Show core
   devices" switch is hidden (the feature is deferred; the setting still persists). What's left to
   build for all three is tracked in [TODO.md](TODO.md).
 
@@ -400,12 +400,8 @@ copy-pasted variants. New screens should use these rather than hand-rolling a `C
 These exist as routes/nav destinations with a "coming soon" placeholder only, no real
 functionality. The implementation plan for each is in [TODO.md](TODO.md).
 
-(Shares was built on 2026-10-25 - see TODO.md #1 for what it shows and its follow-ups.)
+(Shares and Server were both built on 2026-10-25 - see TODO.md #1/#2. No stub screens remain.)
 
-- **Server** (`ui/server/ServerScreen.kt`) — was going to show Unraid Connect identity
-  (owner, guid, WAN/LAN IP, remote URL). The original query for this
-  (`ServerInformationQuery`) was deleted when the Dashboard moved off it, since nothing else
-  used it — would need a fresh purpose-built query when this screen gets built for real.
 
 ## Known limitations / things worth verifying against a real server
 

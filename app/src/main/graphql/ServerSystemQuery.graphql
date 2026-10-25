@@ -1,0 +1,35 @@
+query ServerSystemQuery {
+    info {
+        os {
+            uptime
+        }
+        versions {
+            core {
+                unraid
+                api
+                kernel
+            }
+        }
+        cpu {
+            manufacturer
+            brand
+            cores
+            threads
+        }
+        memory {
+            layout {
+                size
+                type
+            }
+        }
+        baseboard {
+            manufacturer
+            model
+        }
+        primaryNetwork {
+            name
+            ipAddress
+            speed
+        }
+    }
+}

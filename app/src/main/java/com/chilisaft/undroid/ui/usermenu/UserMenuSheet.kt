@@ -12,15 +12,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.chilisaft.undroid.data.models.ApiKeyInfo
 import com.chilisaft.undroid.data.models.WidgetResult
 import com.chilisaft.undroid.ui.components.AppCard
 import com.chilisaft.undroid.ui.components.ConfirmActionDialog
+import com.chilisaft.undroid.ui.components.InfoRow
 import com.chilisaft.undroid.ui.theme.AppTheme
 import com.chilisaft.undroid.ui.theme.spacing
 
@@ -99,26 +97,6 @@ private fun WidgetResult<ApiKeyInfo>.toDisplayString(field: (ApiKeyInfo) -> Stri
     is WidgetResult.Success -> field(data)
     is WidgetResult.Failure -> if (permissionDenied) "No permission" else "Unavailable"
     WidgetResult.Loading -> "Loading…"
-}
-
-@Composable
-private fun InfoRow(label: String, value: String) {
-    val spacing = MaterialTheme.spacing
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(Modifier.width(spacing.medium))
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            textAlign = TextAlign.End
-        )
-    }
 }
 
 @Preview(name = "Light Mode", showBackground = true)

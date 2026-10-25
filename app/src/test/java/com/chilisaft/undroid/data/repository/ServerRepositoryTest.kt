@@ -2,7 +2,9 @@ package com.chilisaft.undroid.data.repository
 
 import com.apollographql.apollo.ApolloClient
 import com.chilisaft.undroid.data.models.DockerContainerState
+import com.chilisaft.undroid.data.models.ConnectStatus
 import com.chilisaft.undroid.data.models.WidgetResult
+import com.chilisaft.undroid.graphql.ServerConnectQuery
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.take
@@ -375,5 +377,123 @@ class ServerRepositoryTest {
 
         assertThat(sample.cpuLoadPercent).isEqualTo(50.0)
         assertThat(sample.memoryLoadPercent).isEqualTo(60.0)
+    }
+
+    @Test
+    fun `getServerIdentity maps name, comment, time zone and licence, blanks as null`() = runBlocking {
+        mockWebServer.enqueue(MockResponse().setBody("""{"data": {"vars": {"name": "TOWER", "comment": " ", "timeZone": "Europe/Zurich", "regTy": "PRO"}}}"""))
+
+        val identity = (repository.getServerIdentity() as WidgetResult.Success).data
+
+        assertThat(identity.name).isEqualTo("TOWER")
+        assertThat(identity.comment).isNull()
+        assertThat(identity.timeZone).isEqualTo("Europe/Zurich")
+        assertThat(identity.licence).isEqualTo("Pro")
+    }
+
+    @Test
+    fun `getServerSystem combines cpu and board names, sums memory modules, and reads the primary interface`() = runBlocking {
+        val json = """
+        {"data": {"info": {
+          "os": {"uptime": "2026-10-10T08:00:00Z"},
+          "versions": {"core": {"unraid": "7.3.3", "api": "4.20.0", "kernel": "6.12.24-Unraid"}},
+          "cpu": {"manufacturer": "Intel", "brand": "Core i5-12400", "cores": 6, "threads": 12},
+          "memory": {"layout": [{"size": "17179869184", "type": "DDR4"}, {"size": "17179869184", "type": "DDR4"}]},
+          "baseboard": {"manufacturer": "ASUSTeK", "model": "PRIME B660M-A"},
+          "primaryNetwork": {"name": "eth0", "ipAddress": "192.168.1.10", "speed": 1000}
+        }}}
+        """.trimIndent()
+        mockWebServer.enqueue(MockResponse().setBody(json))
+
+        val system = (repository.getServerSystem() as WidgetResult.Success).data
+
+        assertThat(system.unraidVersion).isEqualTo("7.3.3")
+        assertThat(system.apiVersion).isEqualTo("4.20.0")
+        assertThat(system.cpu).isEqualTo("Intel Core i5-12400")
+        assertThat(system.cpuCores).isEqualTo(6)
+        assertThat(system.cpuThreads).isEqualTo(12)
+        assertThat(system.memoryTotalBytes).isEqualTo(34_359_738_368L)
+        assertThat(system.memoryType).isEqualTo("DDR4")
+        assertThat(system.motherboard).isEqualTo("ASUSTeK PRIME B660M-A")
+        assertThat(system.network?.interfaceName).isEqualTo("eth0")
+        assertThat(system.network?.ipAddress).isEqualTo("192.168.1.10")
+        assertThat(system.network?.speedMbps).isEqualTo(1000)
+    }
+
+    @Test
+    fun `getServerSystem copes with what a real server sends - KiB module sizes and a trademark-laden CPU brand`() = runBlocking {
+        val json = """
+        {"data": {"info": {
+          "os": {"uptime": null},
+          "versions": {"core": {"unraid": "7.3.3", "api": null, "kernel": null}},
+          "cpu": {"manufacturer": "Intel", "brand": "Gen Intel® Core™ i3-12100", "cores": 4, "threads": 8},
+          "memory": {"layout": [{"size": "16777216", "type": "DDR4"}, {"size": "16777216", "type": "DDR4"}]},
+          "baseboard": {"manufacturer": "ASRock", "model": "H610M-ITX/ac"},
+          "primaryNetwork": {"name": "br0", "ipAddress": "192.168.69.7", "speed": null}
+        }}}
+        """.trimIndent()
+        mockWebServer.enqueue(MockResponse().setBody(json))
+
+        val system = (repository.getServerSystem() as WidgetResult.Success).data
+
+        assertThat(system.memoryTotalBytes).isEqualTo(34_359_738_368L) // 32 GiB
+        assertThat(system.cpu).isEqualTo("Intel Core i3-12100")
+        assertThat(system.network?.speedMbps).isNull()
+    }
+
+    @Test
+    fun `getServerSystem leaves memory type empty when modules disagree, and tolerates missing parts`() = runBlocking {
+        val json = """
+        {"data": {"info": {
+          "os": {"uptime": null},
+          "versions": {"core": {"unraid": null, "api": null, "kernel": null}},
+          "cpu": {"manufacturer": null, "brand": null, "cores": null, "threads": null},
+          "memory": {"layout": [{"size": "8589934592", "type": "DDR4"}, {"size": "8589934592", "type": "DDR5"}]},
+          "baseboard": {"manufacturer": null, "model": null},
+          "primaryNetwork": null
+        }}}
+        """.trimIndent()
+        mockWebServer.enqueue(MockResponse().setBody(json))
+
+        val system = (repository.getServerSystem() as WidgetResult.Success).data
+
+        assertThat(system.memoryTotalBytes).isEqualTo(17_179_869_184L)
+        assertThat(system.memoryType).isNull()
+        assertThat(system.cpu).isNull()
+        assertThat(system.motherboard).isNull()
+        assertThat(system.network).isNull()
+    }
+
+    @Test
+    fun `getConnectInfo maps an online server, blanks as null`() = runBlocking {
+        val json = """
+        {"data": {"server": {"status": "ONLINE", "lanip": "192.168.1.10", "wanip": "203.0.113.7",
+          "localurl": "https://192-168-1-10.abc.myunraid.net", "remoteurl": "", "owner": {"username": "owner"}}}}
+        """.trimIndent()
+        mockWebServer.enqueue(MockResponse().setBody(json))
+
+        val connect = (repository.getConnectInfo() as WidgetResult.Success).data
+
+        assertThat(connect.status).isEqualTo(ConnectStatus.ONLINE)
+        assertThat(connect.owner).isEqualTo("owner")
+        assertThat(connect.wanIp).isEqualTo("203.0.113.7")
+        assertThat(connect.remoteUrl).isNull()
+    }
+
+    @Test
+    fun `getConnectInfo treats a missing server (never signed in to Connect) as not set up, not as an error`() = runBlocking {
+        mockWebServer.enqueue(MockResponse().setBody("""{"data": {"server": null}}"""))
+
+        val connect = (repository.getConnectInfo() as WidgetResult.Success).data
+
+        assertThat(connect.status).isEqualTo(ConnectStatus.NEVER_CONNECTED)
+        assertThat(connect.lanIp).isNull()
+    }
+
+    @Test
+    fun `the Connect query never asks for the server's API key`() {
+        val query = ServerConnectQuery().document()
+
+        assertThat(query).doesNotContain("apikey")
     }
 }

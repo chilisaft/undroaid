@@ -34,29 +34,27 @@ Possible follow-ups:
 
 ---
 
-## 2. Server screen
+## 2. Server screen - built 2026-10-25
 
-**Where:** More tab → Server (`ui/server/ServerScreen.kt`, route `server`). Currently a
-"coming soon" placeholder.
+More tab -> Server: three independently loading sections, each needing its own API-key
+permission (same pattern as the Dashboard widgets):
+- **Identity** (`vars`, VARS): name, comment, time zone, licence tag (`regTy`).
+- **System** (`info`, INFO): Unraid/API/kernel versions, uptime, CPU, cores/threads, total RAM +
+  type, motherboard, primary interface + IP. This query is slow on a real server (several seconds -
+  Unraid gathers hardware info), which is why it doesn't block the other sections.
+- **Unraid Connect** (`server`, SERVERS): status (Online / Offline / "Not set up" when `server`
+  is null), account, LAN IP, WAN IP (hidden until tapped), local/remote URL (tap opens). The
+  server's Connect `apikey` is deliberately never selected (a test guards it).
 
-**Goal:** server identity and connectivity at a glance - what this box is, how to reach it.
+Checked against a real server (Unraid 7.3.3), which corrected the first version:
+- `MemoryLayout.size` is documented as bytes but came back in KiB - both are accepted (a module
+  under 1 GiB can only be KiB).
+- `InfoCpu.brand` already contains the vendor and ®/™ marks ("Gen Intel® Core™ i3-12100") - tidied
+  to "Intel Core i3-12100".
 
-**Data:** root query `server: Server` - needs the `SERVERS` resource permission. `Server` fields:
-`name`, `comment`, `status` (`ONLINE`/`OFFLINE`/`NEVER_CONNECTED` - Unraid Connect status),
-`lanip`, `wanip`, `localurl`, `remoteurl`, `guid`, `owner { ... }`. The old
-`ServerInformationQuery` that used this was deleted when the Dashboard moved off it; write a
-fresh, purpose-built query.
-
-> **Do not select `Server.apikey`** - it's the server's Connect API key, not something the app
-> needs, and fetching it would put a secret in memory/logs for no reason.
-
-**To do:**
-- [ ] `ServerDetailsQuery.graphql` (`server { name comment status lanip wanip localurl remoteurl owner { username } }` - check `ProfileModel`'s fields in the schema)
-- [ ] Model + `ServerRepository.getServerDetails()` returning `WidgetResult`
-- [ ] Screen: `DetailTopBar`, identity card (name, comment), connectivity card (LAN/WAN IP, local/remote URL with tap-to-open via `LocalUriHandler`), Connect status as a `StatusLine` (`ONLINE` → Ok, `OFFLINE` → Error, `NEVER_CONNECTED` → Neutral)
-- [ ] Consider also showing OS/version/uptime from `info` (already partly fetched for the account sheet and Dashboard - reuse, don't duplicate queries)
-- [ ] Tests for repository mapping (including a server that has never used Connect - `remoteurl`/`wanip` likely empty) and the ViewModel
-- [ ] Decide whether WAN IP should be shown by default or behind a tap (it's a privacy-sensitive value on a screen people may screenshot)
+Possible follow-ups:
+- [ ] Registration state (`vars.regState`, e.g. expired/blacklisted key) as a warning line.
+- [ ] Copy-to-clipboard on long-press for IPs/URLs.
 
 ---
 

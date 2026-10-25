@@ -1,0 +1,8 @@
+query ServerIdentityQuery {
+    vars {
+        name
+        comment
+        timeZone
+        regTy
+    }
+}

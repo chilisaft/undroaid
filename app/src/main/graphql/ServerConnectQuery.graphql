@@ -1,0 +1,14 @@
+# Deliberately not selecting `apikey`: it's the server's Unraid Connect API key, which this app
+# never needs - fetching it would only put a secret in memory for no reason.
+query ServerConnectQuery {
+    server {
+        status
+        lanip
+        wanip
+        localurl
+        remoteurl
+        owner {
+            username
+        }
+    }
+}
