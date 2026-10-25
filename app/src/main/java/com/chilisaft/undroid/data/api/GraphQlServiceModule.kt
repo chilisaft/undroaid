@@ -2,8 +2,6 @@ package com.chilisaft.undroid.data.api
 
 import com.apollographql.apollo.ApolloClient
 import com.apollographql.apollo.network.http.DefaultHttpEngine
-import com.apollographql.apollo.network.websocket.WebSocketEngine
-import com.apollographql.apollo.network.websocket.WebSocketNetworkTransport
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -32,22 +30,14 @@ object GraphQlServiceModule {
     fun provideApolloClient(
         okHttpClient: OkHttpClient
     ): ApolloClient {
-        // `ApolloClient.Builder().okHttpClient(...)` is a convenience that sets up its own
-        // subscriptionNetworkTransport internally, which collides with configuring
-        // webSocketServerUrl separately (crashes with "webSocketServerUrl has no effect if
-        // subscriptionNetworkTransport is set"). Wiring the HTTP engine and the WebSocket
-        // transport explicitly instead - both share the same OkHttpClient, so
-        // UnraidInterceptor still rewrites the URL and attaches the API key for subscriptions
-        // exactly as it does for queries/mutations.
+        // The real server URL and API key are applied per request by UnraidInterceptor, so the
+        // builder only needs a placeholder. No subscription (WebSocket) transport: the app polls
+        // instead of subscribing (see ServerRepository.observeSystemMetricsPoll) - if that ever
+        // changes, wire one with `subscriptionNetworkTransport(...)` sharing this OkHttpClient,
+        // not `okHttpClient(...)`/`webSocketServerUrl(...)`, which conflict at build time.
         return ApolloClient.Builder()
             .serverUrl(PLACEHOLDER_URL)
             .httpEngine(DefaultHttpEngine { okHttpClient })
-            .subscriptionNetworkTransport(
-                WebSocketNetworkTransport.Builder()
-                    .serverUrl(PLACEHOLDER_URL)
-                    .webSocketEngine(WebSocketEngine { okHttpClient })
-                    .build()
-            )
             .build()
     }
 }

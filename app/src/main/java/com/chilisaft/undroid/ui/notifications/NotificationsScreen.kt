@@ -2,11 +2,8 @@ package com.chilisaft.undroid.ui.notifications
 
 import android.content.res.Configuration
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.TaskAlt
 import androidx.compose.material.icons.filled.Warning
@@ -16,6 +13,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -27,6 +27,13 @@ import com.chilisaft.undroid.data.models.Notification
 import com.chilisaft.undroid.data.models.NotificationLevel
 import com.chilisaft.undroid.data.models.WidgetResult
 import com.chilisaft.undroid.ui.components.WidgetSection
+import com.chilisaft.undroid.ui.components.AppCard
+import com.chilisaft.undroid.ui.components.ConfirmActionDialog
+import com.chilisaft.undroid.ui.components.DetailTopBar
+import com.chilisaft.undroid.ui.components.EmptyState
+import com.chilisaft.undroid.ui.components.ScreenList
+import com.chilisaft.undroid.ui.theme.StatusTone
+import com.chilisaft.undroid.ui.theme.color
 import com.chilisaft.undroid.ui.theme.AppTheme
 import com.chilisaft.undroid.ui.theme.spacing
 
@@ -63,25 +70,22 @@ fun NotificationsScreenContent(
     onDismissAll: () -> Unit = {}
 ) {
     val spacing = MaterialTheme.spacing
+    var showDismissAllDialog by remember { mutableStateOf(false) }
+    val notificationCount = (uiState.notifications as? WidgetResult.Success)?.data?.size ?: 0
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Notifications") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
+            DetailTopBar(
+                title = "Notifications",
+                onBack = onBack,
                 actions = {
-                    val hasNotifications = (uiState.notifications as? WidgetResult.Success)?.data?.isNotEmpty() == true
                     TextButton(
-                        onClick = onDismissAll,
-                        enabled = hasNotifications && !uiState.isDismissingAll
+                        onClick = { showDismissAllDialog = true },
+                        enabled = notificationCount > 0 && !uiState.isDismissingAll
                     ) {
                         if (uiState.isDismissingAll) {
                             CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
                         } else {
-                            Text("DISMISS ALL")
+                            Text("Dismiss All")
                         }
                     }
                 }
@@ -89,7 +93,7 @@ fun NotificationsScreenContent(
         }
     ) { padding ->
         PullToRefreshBox(
-            isRefreshing = uiState.notifications is WidgetResult.Loading,
+            isRefreshing = uiState.isRefreshing,
             onRefresh = onRetry,
             modifier = Modifier
                 .fillMaxSize()
@@ -98,18 +102,9 @@ fun NotificationsScreenContent(
         ) {
             WidgetSection(result = uiState.notifications, onRetry = onRetry, minHeight = 200.dp) { notifications ->
                 if (notifications.isEmpty()) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text(
-                            text = "No new notifications",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    EmptyState("No new notifications")
                 } else {
-                    LazyColumn(
-                        verticalArrangement = Arrangement.spacedBy(spacing.medium),
-                        contentPadding = PaddingValues(vertical = spacing.medium)
-                    ) {
+                    ScreenList {
                         items(notifications, key = { it.id }) { notification ->
                             NotificationRow(
                                 notification = notification,
@@ -122,26 +117,32 @@ fun NotificationsScreenContent(
             }
         }
     }
+
+    if (showDismissAllDialog) {
+        ConfirmActionDialog(
+            title = "Dismiss all notifications?",
+            text = if (notificationCount == 1) "The 1 unread notification will be archived." else "All $notificationCount unread notifications will be archived.",
+            confirmLabel = "Dismiss All",
+            onConfirm = onDismissAll,
+            onDismiss = { showDismissAllDialog = false }
+        )
+    }
 }
 
 @Composable
 private fun NotificationRow(notification: Notification, isDismissing: Boolean, onDismiss: () -> Unit) {
     val spacing = MaterialTheme.spacing
     val (icon, color) = when (notification.level) {
-        NotificationLevel.ALERT -> Icons.Filled.Warning to MaterialTheme.colorScheme.error
-        NotificationLevel.WARNING -> Icons.Filled.Warning to MaterialTheme.colorScheme.tertiary
+        NotificationLevel.ALERT -> Icons.Filled.Warning to StatusTone.Error.color
+        NotificationLevel.WARNING -> Icons.Filled.Warning to StatusTone.Warning.color
         NotificationLevel.INFO -> Icons.Filled.TaskAlt to MaterialTheme.colorScheme.primary
     }
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(spacing.mediumLarge),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
-    ) {
+    AppCard {
         Row(modifier = Modifier.padding(spacing.medium), verticalAlignment = Alignment.Top) {
             Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(spacing.medium))
             Column(modifier = Modifier.weight(1f)) {
-                Text(notification.title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                Text(notification.title, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold))
                 // subject and description sometimes duplicate the title or each other depending on
                 // how the source plugin populated them - only show what actually adds information.
                 if (notification.subject.isNotBlank() && notification.subject != notification.title) {
@@ -152,7 +153,7 @@ private fun NotificationRow(notification: Notification, isDismissing: Boolean, o
                 }
                 if (notification.timestamp != null) {
                     Spacer(Modifier.height(spacing.small))
-                    Text(notification.timestamp, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+                    Text(notification.timestamp, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
                 }
             }
             Spacer(Modifier.width(spacing.small))

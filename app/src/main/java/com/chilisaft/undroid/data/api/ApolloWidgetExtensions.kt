@@ -6,6 +6,7 @@ import com.apollographql.apollo.api.Mutation
 import com.apollographql.apollo.api.Operation
 import com.apollographql.apollo.api.Query
 import com.apollographql.apollo.exception.ApolloException
+import com.apollographql.apollo.exception.ApolloHttpException
 import com.chilisaft.undroid.data.models.WidgetResult
 
 /**
@@ -17,20 +18,27 @@ import com.chilisaft.undroid.data.models.WidgetResult
 suspend fun <D : Query.Data, T> ApolloClient.runWidgetQuery(query: Query<D>, map: (D) -> T): WidgetResult<T> = try {
     this.query(query).execute().toWidgetResult(map)
 } catch (e: ApolloException) {
-    WidgetResult.Failure(permissionDenied = false, message = e.message)
+    WidgetResult.Failure(permissionDenied = e is ApolloHttpException && e.statusCode == 403, message = e.toUserMessage())
 }
 
 /** Mutation counterpart to [runWidgetQuery]. */
 suspend fun <D : Mutation.Data, T> ApolloClient.runWidgetMutation(mutation: Mutation<D>, map: (D) -> T): WidgetResult<T> = try {
     this.mutation(mutation).execute().toWidgetResult(map)
 } catch (e: ApolloException) {
-    WidgetResult.Failure(permissionDenied = false, message = e.message)
+    WidgetResult.Failure(permissionDenied = e is ApolloHttpException && e.statusCode == 403, message = e.toUserMessage())
 }
 
 private fun <D : Operation.Data, T> ApolloResponse<D>.toWidgetResult(map: (D) -> T): WidgetResult<T> {
     val currentData = data
     return if (currentData != null && !hasErrors()) {
-        WidgetResult.Success(map(currentData))
+        // A mapper that trips over an unexpected response shape (a `!!`, a parse, an index) must
+        // fail just this widget like any other error, not crash the app - only ApolloException
+        // is caught around the network call itself.
+        try {
+            WidgetResult.Success(map(currentData))
+        } catch (e: RuntimeException) {
+            WidgetResult.Failure(permissionDenied = false, message = "Unexpected response from the server")
+        }
     } else {
         WidgetResult.Failure(
             permissionDenied = errors.orEmpty().anyPermissionDenied(),

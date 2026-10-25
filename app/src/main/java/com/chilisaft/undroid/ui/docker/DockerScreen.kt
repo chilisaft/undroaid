@@ -1,24 +1,19 @@
 package com.chilisaft.undroid.ui.docker
 
 import android.content.res.Configuration
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Article
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
-import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.RestartAlt
-import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -31,34 +26,44 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleStartEffect
 import com.chilisaft.undroid.data.models.DockerContainer
 import com.chilisaft.undroid.data.models.DockerContainerState
 import com.chilisaft.undroid.data.models.DockerLogLine
 import com.chilisaft.undroid.data.models.WidgetResult
 import com.chilisaft.undroid.ui.components.ContainerIconBadge
-import com.chilisaft.undroid.ui.components.ScreenTitle
+import com.chilisaft.undroid.ui.components.ActionSheet
+import com.chilisaft.undroid.ui.components.ActionSheetItem
+import com.chilisaft.undroid.ui.components.EmptyState
+import com.chilisaft.undroid.ui.components.ResourceHeaderCard
+import com.chilisaft.undroid.ui.components.ResourceRowCard
+import com.chilisaft.undroid.ui.components.ScreenList
+import com.chilisaft.undroid.ui.components.TabTopBar
+import com.chilisaft.undroid.ui.components.tryOpenUri
+import com.chilisaft.undroid.ui.components.statusTone
 import com.chilisaft.undroid.ui.components.WidgetSection
 import com.chilisaft.undroid.ui.theme.AppTheme
 import com.chilisaft.undroid.ui.theme.spacing
 
 @Composable
-fun DockerScreen(viewModel: DockerViewModel = hiltViewModel(), onUserClick: () -> Unit = {}) {
+fun DockerScreen(viewModel: DockerViewModel = hiltViewModel(), topBarActions: @Composable RowScope.() -> Unit = {}) {
     val uiState by viewModel.uiState.collectAsState()
+    LifecycleStartEffect(viewModel) {
+        viewModel.onScreenVisible()
+        onStopOrDispose { viewModel.onScreenHidden() }
+    }
     DockerScreenContent(
         uiState = uiState,
         onRetry = viewModel::refresh,
-        onUserClick = onUserClick,
+        topBarActions = topBarActions,
         onStart = viewModel::start,
         onStop = viewModel::stop,
         onPause = viewModel::pause,
@@ -66,7 +71,8 @@ fun DockerScreen(viewModel: DockerViewModel = hiltViewModel(), onUserClick: () -
         onRestart = viewModel::restart,
         onViewLogs = viewModel::openLogs,
         onRetryLogs = viewModel::retryLogs,
-        onCloseLogs = viewModel::closeLogs
+        onCloseLogs = viewModel::closeLogs,
+        onOpenUrlFailed = viewModel::reportUnopenableUrl
     )
 }
 
@@ -75,7 +81,7 @@ fun DockerScreen(viewModel: DockerViewModel = hiltViewModel(), onUserClick: () -
 fun DockerScreenContent(
     uiState: DockerScreenState,
     onRetry: () -> Unit = {},
-    onUserClick: () -> Unit = {},
+    topBarActions: @Composable RowScope.() -> Unit = {},
     onStart: (String) -> Unit = {},
     onStop: (String) -> Unit = {},
     onPause: (String) -> Unit = {},
@@ -83,25 +89,17 @@ fun DockerScreenContent(
     onRestart: (String) -> Unit = {},
     onViewLogs: (String, String) -> Unit = { _, _ -> },
     onRetryLogs: () -> Unit = {},
-    onCloseLogs: () -> Unit = {}
+    onCloseLogs: () -> Unit = {},
+    onOpenUrlFailed: (String) -> Unit = {}
 ) {
     val spacing = MaterialTheme.spacing
     var selectedContainer by remember { mutableStateOf<DockerContainer?>(null) }
 
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { ScreenTitle(Icons.Filled.SmartToy, "Docker Containers") },
-                actions = {
-                    IconButton(onClick = onUserClick) {
-                        Icon(Icons.Filled.AccountCircle, contentDescription = "Account")
-                    }
-                }
-            )
-        }
+        topBar = { TabTopBar(title = "Docker", icon = Icons.Filled.Layers, actions = topBarActions) }
     ) { padding ->
         PullToRefreshBox(
-            isRefreshing = uiState.containers is WidgetResult.Loading,
+            isRefreshing = uiState.isRefreshing,
             onRefresh = onRetry,
             modifier = Modifier
                 .fillMaxSize()
@@ -110,23 +108,19 @@ fun DockerScreenContent(
         ) {
             WidgetSection(result = uiState.containers, onRetry = onRetry, minHeight = 200.dp) { containers ->
                 if (containers.isEmpty()) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text(
-                            text = "No containers found",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    EmptyState("No containers found")
                 } else {
-                    LazyColumn(
-                        verticalArrangement = Arrangement.spacedBy(spacing.itemSpacing),
-                        contentPadding = PaddingValues(vertical = spacing.medium)
-                    ) {
+                    ScreenList {
                         items(containers, key = { it.id }) { container ->
-                            ContainerRow(
-                                container = container,
+                            ResourceRowCard(
+                                title = container.name,
+                                tone = container.state.statusTone,
+                                statusText = container.statusText,
                                 isActioning = container.id in uiState.actioningIds,
-                                onClick = { selectedContainer = container }
+                                onClick = { selectedContainer = container },
+                                leading = { size ->
+                                    ContainerIconBadge(container.iconUrl, isRunning = container.state == DockerContainerState.RUNNING, size = size)
+                                }
                             )
                         }
                     }
@@ -145,7 +139,8 @@ fun DockerScreenContent(
             onPause = { onPause(container.id); selectedContainer = null },
             onUnpause = { onUnpause(container.id); selectedContainer = null },
             onRestart = { onRestart(container.id); selectedContainer = null },
-            onViewLogs = { onViewLogs(container.id, container.name); selectedContainer = null }
+            onViewLogs = { onViewLogs(container.id, container.name); selectedContainer = null },
+            onOpenUrlFailed = onOpenUrlFailed
         )
     }
 
@@ -156,69 +151,6 @@ fun DockerScreenContent(
 }
 
 @Composable
-private fun ContainerRow(container: DockerContainer, isActioning: Boolean, onClick: () -> Unit) {
-    val spacing = MaterialTheme.spacing
-    val isRunning = container.state == DockerContainerState.RUNNING
-    val statusDotColor = when (container.state) {
-        DockerContainerState.RUNNING -> Color(0xFF4CAF50)
-        DockerContainerState.PAUSED -> MaterialTheme.colorScheme.tertiary
-        DockerContainerState.EXITED -> MaterialTheme.colorScheme.error
-    }
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(enabled = !isActioning, onClick = onClick),
-        shape = RoundedCornerShape(spacing.mediumLarge),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = spacing.medium, vertical = spacing.medium),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            ContainerIconBadge(iconUrl = container.iconUrl, isRunning = isRunning, size = 52.dp)
-            Spacer(Modifier.width(spacing.mediumLarge))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    container.name,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(Modifier.height(spacing.extraSmall))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .background(color = statusDotColor, shape = RoundedCornerShape(50))
-                    )
-                    Spacer(Modifier.width(spacing.extraSmall))
-                    Text(
-                        text = container.statusText,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-            Spacer(Modifier.width(spacing.medium))
-            if (isActioning) {
-                CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
-            } else {
-                Icon(
-                    Icons.Filled.MoreVert,
-                    contentDescription = "Actions",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(22.dp)
-                )
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
 private fun ContainerActionSheet(
     container: DockerContainer,
     onDismiss: () -> Unit,
@@ -227,36 +159,45 @@ private fun ContainerActionSheet(
     onPause: () -> Unit,
     onUnpause: () -> Unit,
     onRestart: () -> Unit,
-    onViewLogs: () -> Unit
+    onViewLogs: () -> Unit,
+    onOpenUrlFailed: (String) -> Unit
 ) {
-    val spacing = MaterialTheme.spacing
     val uriHandler = LocalUriHandler.current
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(modifier = Modifier.padding(bottom = spacing.large)) {
-            ContainerInfoCard(container = container, modifier = Modifier.padding(horizontal = spacing.medium))
-            Spacer(Modifier.height(spacing.small))
-            when (container.state) {
-                DockerContainerState.RUNNING -> {
-                    ActionSheetItem(Icons.Filled.RestartAlt, "Restart", onRestart)
-                    ActionSheetItem(Icons.Filled.Pause, "Pause", onPause)
-                    ActionSheetItem(Icons.Filled.Stop, "Stop", onStop)
+    ActionSheet(
+        onDismissRequest = onDismiss,
+        header = {
+            ResourceHeaderCard(
+                title = container.name,
+                subtitle = container.image,
+                tone = container.state.statusTone,
+                statusText = container.statusText,
+                leading = { size ->
+                    ContainerIconBadge(container.iconUrl, isRunning = container.state == DockerContainerState.RUNNING, size = size)
                 }
-                DockerContainerState.PAUSED -> {
-                    ActionSheetItem(Icons.Filled.RestartAlt, "Restart", onRestart)
-                    ActionSheetItem(Icons.Filled.PlayArrow, "Resume", onUnpause)
-                    ActionSheetItem(Icons.Filled.Stop, "Stop", onStop)
-                }
-                DockerContainerState.EXITED -> {
-                    ActionSheetItem(Icons.Filled.PlayArrow, "Start", onStart)
-                }
+            )
+        }
+    ) {
+        when (container.state) {
+            DockerContainerState.RUNNING -> {
+                ActionSheetItem(Icons.Filled.RestartAlt, "Restart", onRestart)
+                ActionSheetItem(Icons.Filled.Pause, "Pause", onPause)
+                ActionSheetItem(Icons.Filled.Stop, "Stop", onStop, destructive = true)
             }
-            ActionSheetItem(Icons.AutoMirrored.Filled.Article, "View Logs", onViewLogs)
-            if (!container.webUiUrl.isNullOrBlank()) {
-                ActionSheetItem(Icons.AutoMirrored.Filled.OpenInNew, "Open Web UI") {
-                    uriHandler.openUri(container.webUiUrl)
-                    onDismiss()
-                }
+            DockerContainerState.PAUSED -> {
+                ActionSheetItem(Icons.Filled.RestartAlt, "Restart", onRestart)
+                ActionSheetItem(Icons.Filled.PlayArrow, "Resume", onUnpause)
+                ActionSheetItem(Icons.Filled.Stop, "Stop", onStop, destructive = true)
             }
+            DockerContainerState.EXITED -> {
+                ActionSheetItem(Icons.Filled.PlayArrow, "Start", onStart)
+            }
+        }
+        ActionSheetItem(Icons.AutoMirrored.Filled.Article, "View Logs", onViewLogs)
+        if (!container.webUiUrl.isNullOrBlank()) {
+            ActionSheetItem(Icons.AutoMirrored.Filled.OpenInNew, "Open Web UI", {
+                if (!uriHandler.tryOpenUri(container.webUiUrl)) onOpenUrlFailed(container.webUiUrl)
+                onDismiss()
+            })
         }
     }
 }
@@ -275,7 +216,7 @@ private fun ContainerLogsDialog(state: DockerLogsState, onRetry: () -> Unit, onD
             modifier = Modifier
                 .fillMaxWidth(0.96f)
                 .fillMaxHeight(0.9f),
-            shape = RoundedCornerShape(spacing.mediumLarge),
+            shape = MaterialTheme.shapes.large,
             color = MaterialTheme.colorScheme.surfaceContainerHigh
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
@@ -286,7 +227,7 @@ private fun ContainerLogsDialog(state: DockerLogsState, onRetry: () -> Unit, onD
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("Logs", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text("Logs", style = MaterialTheme.typography.titleMedium)
                         Text(
                             state.containerName,
                             style = MaterialTheme.typography.bodySmall,
@@ -303,13 +244,7 @@ private fun ContainerLogsDialog(state: DockerLogsState, onRetry: () -> Unit, onD
                 Box(modifier = Modifier.weight(1f)) {
                     WidgetSection(result = state.result, onRetry = onRetry, minHeight = 200.dp) { lines ->
                         if (lines.isEmpty()) {
-                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Text(
-                                    text = "No log output yet",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
+                            EmptyState("No log output yet")
                         } else {
                             LogLines(lines)
                         }
@@ -341,78 +276,6 @@ private fun LogLines(lines: List<DockerLogLine>) {
                 )
             }
         }
-    }
-}
-
-@Composable
-private fun ContainerInfoCard(container: DockerContainer, modifier: Modifier = Modifier) {
-    val spacing = MaterialTheme.spacing
-    val isRunning = container.state == DockerContainerState.RUNNING
-    val statusDotColor = when (container.state) {
-        DockerContainerState.RUNNING -> Color(0xFF4CAF50)
-        DockerContainerState.PAUSED -> MaterialTheme.colorScheme.tertiary
-        DockerContainerState.EXITED -> MaterialTheme.colorScheme.error
-    }
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(spacing.mediumLarge),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
-    ) {
-        Row(
-            modifier = Modifier.padding(spacing.medium),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            ContainerIconBadge(iconUrl = container.iconUrl, isRunning = isRunning, size = 56.dp)
-            Spacer(Modifier.width(spacing.mediumLarge))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    container.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    container.image,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(Modifier.height(spacing.extraSmall))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .background(color = statusDotColor, shape = RoundedCornerShape(50))
-                    )
-                    Spacer(Modifier.width(spacing.extraSmall))
-                    Text(
-                        text = container.statusText,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ActionSheetItem(icon: ImageVector, label: String, onClick: () -> Unit) {
-    val spacing = MaterialTheme.spacing
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = spacing.large, vertical = spacing.medium),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.width(spacing.medium))
-        Text(label, style = MaterialTheme.typography.bodyLarge)
     }
 }
 

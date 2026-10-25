@@ -46,7 +46,8 @@ class VmRepository @Inject constructor(
         id = id,
         name = name ?: "Unnamed VM",
         state = state.toRunState(),
-        statusLabel = state.toLabel()
+        statusLabel = state.toLabel(),
+        crashed = state == VmState.CRASHED
     )
 
     private fun VmState.toRunState(): VmRunState = when (this) {

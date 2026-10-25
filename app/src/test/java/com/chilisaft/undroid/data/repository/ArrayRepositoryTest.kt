@@ -3,6 +3,7 @@ package com.chilisaft.undroid.data.repository
 import com.apollographql.apollo.ApolloClient
 import com.chilisaft.undroid.data.models.ArrayDeviceRole
 import com.chilisaft.undroid.data.models.ArrayRunState
+import com.chilisaft.undroid.data.models.DeviceHealth
 import com.chilisaft.undroid.data.models.WidgetResult
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.runBlocking
@@ -76,6 +77,7 @@ class ArrayRepositoryTest {
         assertThat(overview.disks[0].sizeKb).isEqualTo(1953514584L)
         assertThat(overview.disks[0].usedKb).isEqualTo(1053000000L)
         assertThat(overview.disks[0].statusLabel).isEqualTo("OK")
+        assertThat(overview.disks[0].health).isEqualTo(DeviceHealth.OK)
         assertThat(overview.caches).hasSize(1)
         assertThat(overview.caches[0].role).isEqualTo(ArrayDeviceRole.CACHE)
     }

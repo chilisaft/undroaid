@@ -2,7 +2,6 @@ package com.chilisaft.undroid.ui.usermenu
 
 import android.content.res.Configuration
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Settings
@@ -12,7 +11,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -21,6 +19,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.chilisaft.undroid.data.models.ApiKeyInfo
 import com.chilisaft.undroid.data.models.WidgetResult
+import com.chilisaft.undroid.ui.components.AppCard
+import com.chilisaft.undroid.ui.components.ConfirmActionDialog
 import com.chilisaft.undroid.ui.theme.AppTheme
 import com.chilisaft.undroid.ui.theme.spacing
 
@@ -43,11 +43,9 @@ fun UserMenuSheet(
                 .padding(bottom = spacing.large),
             verticalArrangement = Arrangement.spacedBy(spacing.medium)
         ) {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(spacing.mediumLarge),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
-            ) {
+            // surfaceContainerHigh, not the default Low - a bottom sheet is itself surfaceContainerLow,
+            // so a default AppCard would vanish into it (same as ResourceHeaderCard on action sheets).
+            AppCard(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh) {
                 Column(
                     modifier = Modifier.padding(spacing.medium),
                     verticalArrangement = Arrangement.spacedBy(spacing.small)
@@ -74,25 +72,19 @@ fun UserMenuSheet(
             ) {
                 Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(spacing.small))
-                Text("Logout")
+                Text("Log Out")
             }
         }
     }
 
     if (showLogoutDialog) {
-        AlertDialog(
-            onDismissRequest = { showLogoutDialog = false },
-            title = { Text("Logout?") },
-            text = { Text("You'll need your server URL and API token to log back in.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    showLogoutDialog = false
-                    onLogoutConfirmed()
-                }) { Text("Logout") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showLogoutDialog = false }) { Text("Cancel") }
-            }
+        ConfirmActionDialog(
+            title = "Log out?",
+            text = "You'll need your server URL and API key to log back in.",
+            confirmLabel = "Log Out",
+            onConfirm = onLogoutConfirmed,
+            onDismiss = { showLogoutDialog = false },
+            destructive = true
         )
     }
 }
@@ -121,8 +113,7 @@ private fun InfoRow(label: String, value: String) {
         Spacer(Modifier.width(spacing.medium))
         Text(
             text = value,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.End

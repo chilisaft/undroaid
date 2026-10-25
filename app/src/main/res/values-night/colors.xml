@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- = ui/theme/Color.kt `backgroundDark`. -->
+    <color name="window_background">#FF10150E</color>
+</resources>

@@ -2,16 +2,16 @@ package com.chilisaft.undroid.ui.settings
 
 import android.content.res.Configuration
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.chilisaft.undroid.data.models.ThemeMode
+import com.chilisaft.undroid.ui.components.AppCard
+import com.chilisaft.undroid.ui.components.DetailTopBar
+import com.chilisaft.undroid.ui.components.SectionHeader
 import com.chilisaft.undroid.ui.theme.AppTheme
 import com.chilisaft.undroid.ui.theme.spacing
 
@@ -26,7 +26,6 @@ fun SettingsScreen(
         uiState = uiState,
         onBack = onBack,
         onThemeModeChange = viewModel::setThemeMode,
-        onShowCoreListChange = viewModel::setShowCoreList,
         onUseDynamicColorChange = viewModel::setUseDynamicColor
     )
 }
@@ -37,31 +36,21 @@ fun SettingsScreenContent(
     uiState: SettingsScreenState,
     onBack: () -> Unit = {},
     onThemeModeChange: (ThemeMode) -> Unit = {},
-    onShowCoreListChange: (Boolean) -> Unit = {},
     onUseDynamicColorChange: (Boolean) -> Unit = {}
 ) {
     val spacing = MaterialTheme.spacing
 
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Settings") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                }
-            )
-        }
+        topBar = { DetailTopBar(title = "Settings", onBack = onBack) }
     ) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
                 .padding(horizontal = spacing.medium),
-            verticalArrangement = Arrangement.spacedBy(spacing.large)
+            verticalArrangement = Arrangement.spacedBy(spacing.itemSpacing)
         ) {
-            Spacer(Modifier.height(spacing.small))
+            Spacer(Modifier.height(spacing.extraSmall))
 
             SettingsSection(title = "Appearance") {
                 ThemeModeSelector(selected = uiState.themeMode, onSelected = onThemeModeChange)
@@ -83,23 +72,9 @@ fun SettingsScreenContent(
                 }
             }
 
-            SettingsSection(title = "Display") {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Show core devices", style = MaterialTheme.typography.bodyLarge)
-                        Text(
-                            "Include core system devices in device lists",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    Switch(checked = uiState.showCoreList, onCheckedChange = onShowCoreListChange)
-                }
-            }
+            // "Show core devices" (SettingsViewModel.setShowCoreList / Storage.showCoreList) is
+            // persisted but has no consumer yet - its switch is hidden until a screen uses it
+            // (see NOTES.md's "Deferred: Show core devices").
         }
     }
 }
@@ -107,20 +82,13 @@ fun SettingsScreenContent(
 @Composable
 private fun SettingsSection(title: String, content: @Composable ColumnScope.() -> Unit) {
     val spacing = MaterialTheme.spacing
-    Column(verticalArrangement = Arrangement.spacedBy(spacing.small)) {
-        Text(
-            text = title.uppercase(),
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary
-        )
-        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
-            Column(
-                modifier = Modifier.padding(spacing.medium),
-                verticalArrangement = Arrangement.spacedBy(spacing.medium)
-            ) {
-                content()
-            }
+    SectionHeader(title)
+    AppCard {
+        Column(
+            modifier = Modifier.padding(spacing.medium),
+            verticalArrangement = Arrangement.spacedBy(spacing.medium)
+        ) {
+            content()
         }
     }
 }
@@ -151,6 +119,6 @@ private fun ThemeModeSelector(selected: ThemeMode, onSelected: (ThemeMode) -> Un
 @Composable
 fun SettingsScreenPreview() {
     AppTheme {
-        SettingsScreenContent(uiState = SettingsScreenState(themeMode = ThemeMode.SYSTEM, showCoreList = true))
+        SettingsScreenContent(uiState = SettingsScreenState(themeMode = ThemeMode.SYSTEM))
     }
 }

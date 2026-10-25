@@ -127,6 +127,28 @@ class ServerRepositoryTest {
     }
 
     @Test
+    fun `getArrayStatus treats an unassigned slot (DISK_NP) as healthy, not a problem`() = runBlocking {
+        val json = """
+        {
+          "data": {
+            "array": {
+              "state": "STARTED",
+              "capacity": { "kilobytes": { "used": "1024", "total": "4096" } },
+              "disks": [{ "status": "DISK_OK" }],
+              "parities": [{ "status": "DISK_OK", "size": "4294967296" }, { "status": "DISK_NP", "size": "0" }],
+              "caches": []
+            }
+          }
+        }
+        """.trimIndent()
+        mockWebServer.enqueue(MockResponse().setBody(json))
+
+        val result = repository.getArrayStatus()
+
+        assertThat((result as WidgetResult.Success).data.healthy).isTrue()
+    }
+
+    @Test
     fun `getParityCheckStatus maps status, progress, speed, and errors`() = runBlocking {
         val json = """
         {

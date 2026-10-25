@@ -18,7 +18,10 @@ data class LoginScreenState(
     val isLoading: Boolean = false,
     val error: String? = null,
     val isLoggedIn: Boolean = false
-)
+) {
+    val isLoginEnabled: Boolean
+        get() = serverUrl.isNotBlank() && apiToken.isNotBlank() && !isLoading
+}
 
 @HiltViewModel
 class LoginViewModel @Inject constructor(
@@ -46,10 +49,6 @@ class LoginViewModel @Inject constructor(
 
     fun onApiTokenChange(apiToken: String) {
         _uiState.update { it.copy(apiToken = apiToken, error = null) }
-    }
-
-    fun isLoginEnabled(): Boolean {
-        return uiState.value.serverUrl.isNotBlank() && uiState.value.apiToken.isNotBlank() && !uiState.value.isLoading
     }
 
     fun login() {

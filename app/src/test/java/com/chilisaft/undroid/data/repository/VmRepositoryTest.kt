@@ -87,6 +87,7 @@ class VmRepositoryTest {
         assertThat(vms.map { it.state }).containsExactly(
             VmRunState.STOPPED, VmRunState.STOPPED, VmRunState.STOPPED, VmRunState.STOPPED, VmRunState.STOPPED
         ).inOrder()
+        assertThat(vms.map { it.crashed }).containsExactly(false, false, false, true, false).inOrder()
     }
 
     @Test

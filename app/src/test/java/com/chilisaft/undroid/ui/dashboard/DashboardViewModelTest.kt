@@ -4,15 +4,20 @@ import com.chilisaft.undroid.data.models.ArrayStatus
 import com.chilisaft.undroid.data.models.MetricsSample
 import com.chilisaft.undroid.data.models.ParityCheckInfo
 import com.chilisaft.undroid.data.models.SystemMetrics
+import com.chilisaft.undroid.data.models.VmDomain
+import com.chilisaft.undroid.data.models.VmRunState
 import com.chilisaft.undroid.data.models.WidgetResult
 import com.chilisaft.undroid.data.repository.NotificationsRepository
 import com.chilisaft.undroid.data.repository.ServerRepository
+import com.chilisaft.undroid.data.repository.VmRepository
 import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.runBlocking
@@ -29,6 +34,7 @@ class DashboardViewModelTest {
     private lateinit var viewModel: DashboardViewModel
     private lateinit var repository: ServerRepository
     private lateinit var notificationsRepository: NotificationsRepository
+    private lateinit var vmRepository: VmRepository
 
     private val testDispatcher = StandardTestDispatcher()
 
@@ -40,6 +46,7 @@ class DashboardViewModelTest {
         progressPercent = progress, speed = null, errors = 0, correcting = false
     )
     private val testSystemMetrics = SystemMetrics(bootTimeIso = "2024-01-01T00:00:00Z", cpuLoadPercent = 24.5, memoryLoadPercent = 58.2)
+    private val testVm = VmDomain(id = "v1", name = "Windows 11", state = VmRunState.RUNNING, statusLabel = "Running")
 
     // Buffered so `emit` from the test body can complete without needing an actively-suspended
     // collector to rendezvous with - the ViewModel's collector runs on StandardTestDispatcher
@@ -60,6 +67,9 @@ class DashboardViewModelTest {
         notificationsRepository = mockk {
             coEvery { getUnreadCount() } returns WidgetResult.Success(0)
         }
+        vmRepository = mockk {
+            coEvery { getVms() } returns WidgetResult.Success(emptyList())
+        }
     }
 
     @After
@@ -67,7 +77,7 @@ class DashboardViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun createViewModel() = DashboardViewModel(repository, notificationsRepository)
+    private fun createViewModel() = DashboardViewModel(repository, notificationsRepository, vmRepository)
 
     @Test
     fun `initial state is loading for every widget`() {
@@ -78,12 +88,14 @@ class DashboardViewModelTest {
         assertThat(state.parityCheck).isEqualTo(WidgetResult.Loading)
         assertThat(state.systemMetrics).isEqualTo(WidgetResult.Loading)
         assertThat(state.containers).isEqualTo(WidgetResult.Loading)
+        assertThat(state.vms).isEqualTo(WidgetResult.Loading)
         assertThat(state.unreadNotificationCount).isEqualTo(WidgetResult.Loading)
     }
 
     @Test
     fun `each widget populates independently once loaded`() {
         coEvery { notificationsRepository.getUnreadCount() } returns WidgetResult.Success(3)
+        coEvery { vmRepository.getVms() } returns WidgetResult.Success(listOf(testVm))
         viewModel = createViewModel()
         testDispatcher.scheduler.advanceUntilIdle()
 
@@ -93,6 +105,7 @@ class DashboardViewModelTest {
         assertThat(state.parityCheck).isEqualTo(WidgetResult.Success(parityCheck()))
         assertThat(state.systemMetrics).isEqualTo(WidgetResult.Success(testSystemMetrics))
         assertThat(state.containers).isEqualTo(WidgetResult.Success(emptyList<Nothing>()))
+        assertThat(state.vms).isEqualTo(WidgetResult.Success(listOf(testVm)))
         assertThat(state.unreadNotificationCount).isEqualTo(WidgetResult.Success(3))
     }
 
@@ -107,6 +120,37 @@ class DashboardViewModelTest {
         assertThat(state.containers).isEqualTo(WidgetResult.Failure(permissionDenied = true, message = null))
         assertThat(state.arrayStatus).isEqualTo(WidgetResult.Success(testArrayStatus))
         assertThat(state.systemMetrics).isEqualTo(WidgetResult.Success(testSystemMetrics))
+    }
+
+    @Test
+    fun `a failure on the vms widget does not affect the others`() {
+        coEvery { vmRepository.getVms() } returns WidgetResult.Failure(permissionDenied = true, message = null)
+
+        viewModel = createViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertThat(state.vms).isEqualTo(WidgetResult.Failure(permissionDenied = true, message = null))
+        assertThat(state.arrayStatus).isEqualTo(WidgetResult.Success(testArrayStatus))
+        assertThat(state.containers).isEqualTo(WidgetResult.Success(emptyList<Nothing>()))
+    }
+
+    @Test
+    fun `retrying the vms widget only reloads that widget`() {
+        coEvery { vmRepository.getVms() } returns WidgetResult.Failure(permissionDenied = false, message = "boom")
+        viewModel = createViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertThat(viewModel.uiState.value.vms).isInstanceOf(WidgetResult.Failure::class.java)
+
+        coEvery { vmRepository.getVms() } returns WidgetResult.Success(listOf(testVm))
+        val arrayStatusBeforeRetry = viewModel.uiState.value.arrayStatus
+
+        viewModel.refreshVms()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertThat(state.vms).isEqualTo(WidgetResult.Success(listOf(testVm)))
+        assertThat(state.arrayStatus).isEqualTo(arrayStatusBeforeRetry)
     }
 
     @Test
@@ -155,6 +199,7 @@ class DashboardViewModelTest {
     @Test
     fun `live metric polls merge into an already-loaded systemMetrics without touching uptime`() = runBlocking {
         viewModel = createViewModel()
+        viewModel.onScreenVisible() // polling only runs while the screen is visible
         testDispatcher.scheduler.advanceUntilIdle()
         assertThat(viewModel.uiState.value.systemMetrics).isEqualTo(WidgetResult.Success(testSystemMetrics))
 
@@ -171,6 +216,7 @@ class DashboardViewModelTest {
     fun `live metric polls are dropped while systemMetrics has not successfully loaded`() = runBlocking {
         coEvery { repository.getSystemMetrics() } returns WidgetResult.Failure(permissionDenied = false, message = "boom")
         viewModel = createViewModel()
+        viewModel.onScreenVisible() // polling only runs while the screen is visible
         testDispatcher.scheduler.advanceUntilIdle()
         assertThat(viewModel.uiState.value.systemMetrics).isInstanceOf(WidgetResult.Failure::class.java)
 
@@ -188,6 +234,7 @@ class DashboardViewModelTest {
             WidgetResult.Success(parityCheck(running = false, progress = 100))
         )
         viewModel = createViewModel()
+        viewModel.onScreenVisible() // polling only runs while the screen is visible
         testDispatcher.scheduler.runCurrent() // only the initial load - advanceUntilIdle would fast-forward through the poll's delay too
         assertThat(viewModel.uiState.value.parityCheck).isEqualTo(WidgetResult.Success(parityCheck(running = true, progress = 10)))
 
@@ -216,6 +263,7 @@ class DashboardViewModelTest {
             WidgetResult.Success(parityCheck(running = false, progress = 100))
         )
         viewModel = createViewModel()
+        viewModel.onScreenVisible() // polling only runs while the screen is visible
         testDispatcher.scheduler.runCurrent()
         assertThat(viewModel.uiState.value.parityCheck).isEqualTo(WidgetResult.Success(parityCheck(running = true, progress = 10)))
 
@@ -237,11 +285,74 @@ class DashboardViewModelTest {
     @Test
     fun `does not poll the parity check when none is running`() {
         viewModel = createViewModel() // default stub: not running
+        viewModel.onScreenVisible() // polling only runs while the screen is visible
         testDispatcher.scheduler.advanceUntilIdle()
 
         testDispatcher.scheduler.advanceTimeBy(10_000)
         testDispatcher.scheduler.runCurrent()
 
         coVerify(exactly = 1) { repository.getParityCheckStatus() }
+    }
+
+    @Test
+    fun `no live polling until the screen is visible, and it stops again once hidden`() {
+        viewModel = createViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+        verify(exactly = 0) { repository.observeSystemMetricsPoll() }
+
+        viewModel.onScreenVisible()
+        testDispatcher.scheduler.runCurrent()
+        assertThat(metricsPollFlow.subscriptionCount.value).isEqualTo(1)
+
+        viewModel.onScreenHidden()
+        testDispatcher.scheduler.runCurrent()
+        assertThat(metricsPollFlow.subscriptionCount.value).isEqualTo(0)
+    }
+
+    @Test
+    fun `the parity poll stops while the screen is hidden`() {
+        coEvery { repository.getParityCheckStatus() } returns WidgetResult.Success(parityCheck(running = true, progress = 10))
+        viewModel = createViewModel()
+        viewModel.onScreenVisible()
+        testDispatcher.scheduler.runCurrent()
+
+        viewModel.onScreenHidden()
+        testDispatcher.scheduler.advanceTimeBy(20_000)
+        testDispatcher.scheduler.runCurrent()
+
+        coVerify(exactly = 1) { repository.getParityCheckStatus() } // just the initial load
+    }
+
+    @Test
+    fun `coming back to the screen refreshes, the first visit does not`() {
+        viewModel = createViewModel()
+        viewModel.onScreenVisible()
+        testDispatcher.scheduler.runCurrent()
+        coVerify(exactly = 1) { repository.getArrayStatus() }
+
+        viewModel.onScreenHidden()
+        viewModel.onScreenVisible()
+        testDispatcher.scheduler.runCurrent()
+
+        coVerify(exactly = 2) { repository.getArrayStatus() }
+    }
+
+    @Test
+    fun `a refresh keeps the current data on screen and reports isRefreshing meanwhile`() {
+        viewModel = createViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+        coEvery { repository.getArrayStatus() } coAnswers {
+            delay(1_000)
+            WidgetResult.Success(testArrayStatus.copy(statusLabel = "Array Stopped"))
+        }
+
+        viewModel.refresh()
+        testDispatcher.scheduler.runCurrent()
+        assertThat(viewModel.uiState.value.isRefreshing).isTrue()
+        assertThat(viewModel.uiState.value.arrayStatus).isEqualTo(WidgetResult.Success(testArrayStatus))
+
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertThat(viewModel.uiState.value.isRefreshing).isFalse()
+        assertThat(viewModel.uiState.value.arrayStatus).isEqualTo(WidgetResult.Success(testArrayStatus.copy(statusLabel = "Array Stopped")))
     }
 }

@@ -67,9 +67,7 @@ extensions.configure<ApplicationExtension> {
 dependencies {
 
     // App dependencies
-    implementation(libs.androidx.annotation)
     implementation(libs.kotlinx.coroutines.android)
-    implementation(libs.timber)
 
     // Architecture Components
     implementation(libs.androidx.lifecycle.runtimeCompose)
@@ -79,7 +77,6 @@ dependencies {
     implementation(libs.hilt.android.core)
     implementation(libs.androidx.hilt.navigation.compose)
     implementation(libs.androidx.preference.ktx)
-    implementation(libs.androidx.ui.text.google.fonts)
     ksp(libs.hilt.compiler)
     // Hilt's aggregating javac step bundles its own kotlin-metadata-jvm reader, which lags
     // behind the Kotlin compiler's metadata format; pin a matching version or Hilt fails to parse it.
@@ -105,6 +102,9 @@ dependencies {
 
     debugImplementation(composeBom)
     debugImplementation(libs.androidx.compose.ui.tooling.core)
+    // Declares the empty host activity createComposeRule() launches - it must be merged into the
+    // app under test (debug only), not the test APK, or instrumented Compose tests can't start.
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
 
     // Dependencies for local unit tests
     testImplementation(composeBom)
@@ -127,6 +127,9 @@ dependencies {
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(libs.androidx.compose.ui.test.junit)
+    // Compose's ui-test pulls in espresso-core 3.5.0, which crashes on current Android
+    // (InputManager.getInstance was removed) - pin the newer one from the version catalog.
+    androidTestImplementation(libs.androidx.test.espresso.core)
     androidTestImplementation(libs.mockk.android)
     androidTestImplementation(libs.google.truth)
     androidTestImplementation(libs.androidx.navigation.testing)
@@ -135,7 +138,6 @@ dependencies {
     kspAndroidTest(libs.kotlin.metadata.jvm)
     androidTestImplementation(libs.androidx.compose.ui.tooling.core)
     androidTestImplementation(libs.androidx.test.runner)
-    androidTestImplementation(libs.androidx.compose.ui.test.manifest)
     androidTestImplementation(libs.androidx.test.core.ktx)
     androidTestImplementation(libs.androidx.test.ext)
     androidTestImplementation(libs.androidx.test.rules)

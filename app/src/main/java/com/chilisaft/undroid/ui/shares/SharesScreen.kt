@@ -1,46 +1,27 @@
 package com.chilisaft.undroid.ui.shares
 
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.chilisaft.undroid.ui.components.DetailTopBar
+import com.chilisaft.undroid.ui.components.EmptyState
+import com.chilisaft.undroid.ui.theme.spacing
 
-@OptIn(ExperimentalMaterial3Api::class)
+/** Placeholder until the real screen is built - see TODO.md. */
 @Composable
 fun SharesScreen(onBack: () -> Unit = {}) {
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Shares") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                }
-            )
-        }
+        topBar = { DetailTopBar(title = "Shares", onBack = onBack) }
     ) { padding ->
-        Box(
+        EmptyState(
+            text = "Shares are coming soon.\nThis will list your user shares with their size and free space.",
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = "Shares Screen",
-                style = MaterialTheme.typography.headlineLarge
-            )
-        }
+                .padding(padding)
+                .padding(horizontal = MaterialTheme.spacing.large)
+        )
     }
 }

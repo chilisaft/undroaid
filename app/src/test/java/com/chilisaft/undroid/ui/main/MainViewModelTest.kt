@@ -7,9 +7,11 @@ import com.chilisaft.undroid.data.models.FlashInfo
 import com.chilisaft.undroid.data.models.ParityCheckInfo
 import com.chilisaft.undroid.data.models.WidgetResult
 import com.chilisaft.undroid.data.repository.ArrayRepository
+import com.chilisaft.undroid.ui.UserMessages
 import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.verify
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -24,6 +26,7 @@ import org.junit.Test
 class MainViewModelTest {
 
     private lateinit var viewModel: MainViewModel
+    private val userMessages: UserMessages = mockk(relaxed = true)
     private lateinit var repository: ArrayRepository
 
     private val testDispatcher = StandardTestDispatcher()
@@ -67,7 +70,7 @@ class MainViewModelTest {
 
     @Test
     fun `refresh loads overview, parity check, disk identifications, and flash info`() {
-        viewModel = MainViewModel(repository)
+        viewModel = MainViewModel(repository, userMessages)
         testDispatcher.scheduler.advanceUntilIdle()
 
         val state = viewModel.uiState.value
@@ -80,7 +83,7 @@ class MainViewModelTest {
     @Test
     fun `startArray sends the password and refreshes on success`() {
         coEvery { repository.setArrayState(start = true, password = "hunter2") } returns WidgetResult.Success(Unit)
-        viewModel = MainViewModel(repository)
+        viewModel = MainViewModel(repository, userMessages)
         testDispatcher.scheduler.advanceUntilIdle()
 
         viewModel.startArray("hunter2")
@@ -91,22 +94,44 @@ class MainViewModelTest {
     }
 
     @Test
-    fun `stopArray does not refresh on failure`() {
+    fun `stopArray does not refresh on failure, and tells the user why`() {
         coEvery { repository.setArrayState(start = false, password = null) } returns WidgetResult.Failure(permissionDenied = false, message = "boom")
-        viewModel = MainViewModel(repository)
+        viewModel = MainViewModel(repository, userMessages)
         testDispatcher.scheduler.advanceUntilIdle()
 
         viewModel.stopArray()
         testDispatcher.scheduler.advanceUntilIdle()
 
         coVerify(exactly = 1) { repository.getArrayOverview() } // only the initial load - failure shouldn't trigger a refresh
+        verify { userMessages.showFailure("stop the array", WidgetResult.Failure(permissionDenied = false, message = "boom")) }
+        assertThat(viewModel.uiState.value.actioningArray).isFalse()
+    }
+
+    @Test
+    fun `stopArray keeps polling the overview until the array actually reports stopped`() {
+        val stopped = testOverview.copy(state = ArrayRunState.STOPPED, statusLabel = "Array Stopped")
+        coEvery { repository.setArrayState(start = false, password = null) } returns WidgetResult.Success(Unit)
+        viewModel = MainViewModel(repository, userMessages)
+        testDispatcher.scheduler.advanceUntilIdle()
+        // initial load (already done), then two polls still STARTED, then STOPPED
+        coEvery { repository.getArrayOverview() } returnsMany listOf(
+            WidgetResult.Success(testOverview),
+            WidgetResult.Success(testOverview),
+            WidgetResult.Success(stopped)
+        )
+
+        viewModel.stopArray()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        coVerify(exactly = 4) { repository.getArrayOverview() } // initial + 3 polls, no more once STOPPED is seen
+        assertThat(viewModel.uiState.value.overview).isEqualTo(WidgetResult.Success(stopped))
         assertThat(viewModel.uiState.value.actioningArray).isFalse()
     }
 
     @Test
     fun `startParityCheck refreshes on success`() {
         coEvery { repository.startParityCheck() } returns WidgetResult.Success(Unit)
-        viewModel = MainViewModel(repository)
+        viewModel = MainViewModel(repository, userMessages)
         testDispatcher.scheduler.advanceUntilIdle()
 
         viewModel.startParityCheck()
@@ -122,7 +147,7 @@ class MainViewModelTest {
         coEvery { repository.pauseParityCheck() } returns WidgetResult.Success(Unit)
         coEvery { repository.resumeParityCheck() } returns WidgetResult.Success(Unit)
         coEvery { repository.cancelParityCheck() } returns WidgetResult.Success(Unit)
-        viewModel = MainViewModel(repository)
+        viewModel = MainViewModel(repository, userMessages)
         testDispatcher.scheduler.advanceUntilIdle()
 
         viewModel.pauseParityCheck()
@@ -144,7 +169,8 @@ class MainViewModelTest {
             WidgetResult.Success(parityCheck(running = true, progress = 20)),
             WidgetResult.Success(parityCheck(running = false, progress = 100))
         )
-        viewModel = MainViewModel(repository)
+        viewModel = MainViewModel(repository, userMessages)
+        viewModel.onScreenVisible() // polling only runs while the screen is visible
         testDispatcher.scheduler.runCurrent() // only the initial load - advanceUntilIdle would fast-forward through the poll's delay too
         assertThat(viewModel.uiState.value.parityCheck).isEqualTo(WidgetResult.Success(parityCheck(running = true, progress = 10)))
 
@@ -172,7 +198,8 @@ class MainViewModelTest {
             WidgetResult.Success(parityCheck(running = true, progress = 30)),
             WidgetResult.Success(parityCheck(running = false, progress = 100))
         )
-        viewModel = MainViewModel(repository)
+        viewModel = MainViewModel(repository, userMessages)
+        viewModel.onScreenVisible() // polling only runs while the screen is visible
         testDispatcher.scheduler.runCurrent()
         assertThat(viewModel.uiState.value.parityCheck).isEqualTo(WidgetResult.Success(parityCheck(running = true, progress = 10)))
 
@@ -195,12 +222,31 @@ class MainViewModelTest {
 
     @Test
     fun `does not poll when no parity check is running`() {
-        viewModel = MainViewModel(repository) // default stub: running = false
+        viewModel = MainViewModel(repository, userMessages) // default stub: running = false
+        viewModel.onScreenVisible() // polling only runs while the screen is visible
         testDispatcher.scheduler.advanceUntilIdle()
 
         testDispatcher.scheduler.advanceTimeBy(10_000)
         testDispatcher.scheduler.runCurrent()
 
         coVerify(exactly = 1) { repository.getParityCheckStatus() }
+    }
+
+    @Test
+    fun `the parity poll stops while the tab is hidden, and coming back refreshes`() {
+        coEvery { repository.getParityCheckStatus() } returns WidgetResult.Success(parityCheck(running = true, progress = 10))
+        viewModel = MainViewModel(repository, userMessages)
+        viewModel.onScreenVisible()
+        testDispatcher.scheduler.runCurrent()
+
+        viewModel.onScreenHidden()
+        testDispatcher.scheduler.advanceTimeBy(20_000)
+        testDispatcher.scheduler.runCurrent()
+        coVerify(exactly = 1) { repository.getParityCheckStatus() }
+
+        viewModel.onScreenVisible()
+        testDispatcher.scheduler.runCurrent()
+        coVerify(exactly = 2) { repository.getParityCheckStatus() } // the revisit refresh
+        coVerify(exactly = 2) { repository.getArrayOverview() }
     }
 }

@@ -5,7 +5,6 @@ import com.apollographql.apollo.api.Optional
 import com.chilisaft.undroid.data.api.runWidgetMutation
 import com.chilisaft.undroid.data.api.runWidgetQuery
 import com.chilisaft.undroid.data.models.DockerContainer
-import com.chilisaft.undroid.data.models.DockerContainerState
 import com.chilisaft.undroid.data.models.DockerLogLine
 import com.chilisaft.undroid.data.models.DockerLogsPage
 import com.chilisaft.undroid.data.models.WidgetResult
@@ -16,7 +15,6 @@ import com.chilisaft.undroid.graphql.DockerRestartContainerMutation
 import com.chilisaft.undroid.graphql.DockerStartContainerMutation
 import com.chilisaft.undroid.graphql.DockerStopContainerMutation
 import com.chilisaft.undroid.graphql.DockerUnpauseContainerMutation
-import com.chilisaft.undroid.graphql.type.ContainerState
 import javax.inject.Inject
 
 /** Backs the Docker tab's full container list + actions - see [ServerRepository] for the trimmed-down summary used on the Dashboard. */
@@ -71,10 +69,4 @@ class DockerRepository @Inject constructor(
         webUiUrl = webUiUrl
     )
 
-    private fun ContainerState.toDockerContainerState(): DockerContainerState = when (this) {
-        ContainerState.RUNNING -> DockerContainerState.RUNNING
-        ContainerState.PAUSED -> DockerContainerState.PAUSED
-        ContainerState.EXITED -> DockerContainerState.EXITED
-        ContainerState.UNKNOWN__ -> DockerContainerState.EXITED
-    }
 }

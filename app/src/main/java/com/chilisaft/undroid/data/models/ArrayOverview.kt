@@ -17,11 +17,20 @@ data class ArrayDeviceInfo(
     val usedKb: Long?,
     val freeKb: Long?,
     val statusLabel: String?,
+    val health: DeviceHealth,
     val tempC: Int?,
     val isSpinning: Boolean?,
     val fsType: String?,
     val transport: String?
 )
+
+/** How a device's status should be judged - derived from the schema's status enum, never from its display label. */
+enum class DeviceHealth {
+    OK,
+    /** An unassigned slot (e.g. no second parity drive) - not a problem. */
+    NOT_PRESENT,
+    PROBLEM
+}
 
 data class DiskIdentification(
     val device: String,

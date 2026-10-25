@@ -1,34 +1,29 @@
 package com.chilisaft.undroid.graphs
 
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.FolderShared
-import androidx.compose.material.icons.filled.Memory
+import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.MoreHoriz
-import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.outlined.Computer
 import androidx.compose.material.icons.outlined.Dashboard
-import androidx.compose.material.icons.outlined.SmartToy
+import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.Storage
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -36,7 +31,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -46,6 +40,10 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.chilisaft.undroid.data.models.WidgetResult
+import com.chilisaft.undroid.ui.components.ActionSheet
+import com.chilisaft.undroid.ui.components.ActionSheetItem
+import com.chilisaft.undroid.ui.components.TabBarActions
 import com.chilisaft.undroid.ui.main.MainScreen
 import com.chilisaft.undroid.ui.dashboard.DashboardScreen
 import com.chilisaft.undroid.ui.dashboard.DashboardViewModel
@@ -54,10 +52,11 @@ import com.chilisaft.undroid.ui.notifications.NotificationsScreen
 import com.chilisaft.undroid.ui.server.ServerScreen
 import com.chilisaft.undroid.ui.settings.SettingsScreen
 import com.chilisaft.undroid.ui.shares.SharesScreen
-import com.chilisaft.undroid.ui.theme.spacing
 import com.chilisaft.undroid.ui.usermenu.UserMenuSheet
 import com.chilisaft.undroid.ui.usermenu.UserMenuViewModel
 import com.chilisaft.undroid.ui.vms.VmsScreen
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 
 private const val SETTINGS_ROUTE = "settings"
 private const val NOTIFICATIONS_ROUTE = "notifications"
@@ -65,9 +64,9 @@ private const val SHARES_ROUTE = "shares"
 private const val SERVER_ROUTE = "server"
 
 /**
- * Destinations shown as tabs in the bottom bar. Shares, Server, and Settings aren't here -
- * they're lower frequency screens, tucked one tap further behind the "More" sheet instead of
- * taking a permanent tab slot.
+ * Destinations shown as tabs in the bottom bar. Shares and Server are lower-frequency screens,
+ * tucked one tap further behind the "More" sheet instead of taking a permanent tab slot (both
+ * still pending - see TODO.md). Settings is reached from the account sheet.
  */
 sealed class BottomNavDestination(val title: String, val route: String, val icon: ImageVector, val icon_selected: ImageVector) {
     data object Dashboard : BottomNavDestination(
@@ -85,8 +84,8 @@ sealed class BottomNavDestination(val title: String, val route: String, val icon
     data object Docker : BottomNavDestination(
         title = "Docker",
         route = "docker",
-        icon = Icons.Outlined.SmartToy,
-        icon_selected = Icons.Filled.SmartToy
+        icon = Icons.Outlined.Layers,
+        icon_selected = Icons.Filled.Layers
     )
     data object Vms : BottomNavDestination(
         title = "VMs",
@@ -99,6 +98,7 @@ sealed class BottomNavDestination(val title: String, val route: String, val icon
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun UndroidNavGraph(
+    userMessages: Flow<String> = emptyFlow(),
     navController: NavHostController = rememberNavController(),
     startDestination: String = BottomNavDestination.Dashboard.route,
     dashboardViewModel: DashboardViewModel = hiltViewModel(),
@@ -117,14 +117,40 @@ fun UndroidNavGraph(
     val selectedIndex = bottomNavItem.indexOfFirst { it.route == currentRoute }
 
     var showMoreSheet by remember { mutableStateOf(false) }
-    val moreSheetState = rememberModalBottomSheetState()
     var showUserSheet by remember { mutableStateOf(false) }
+
+    // The app's one SnackbarHost - see UserMessages. Lives on this outer Scaffold (not each
+    // screen's) so it sits above the bottom bar and survives navigating between screens.
+    val snackbarHostState = remember { SnackbarHostState() }
+    LaunchedEffect(userMessages) {
+        userMessages.collect { snackbarHostState.showSnackbar(it, withDismissAction = true) }
+    }
+
+    // The same bell + account pair on every tab. The unread count lives on DashboardViewModel
+    // (the one instance hoisted to this graph), refreshed whenever Notifications is left.
+    val dashboardState by dashboardViewModel.uiState.collectAsState()
+    val unreadCount = (dashboardState.unreadNotificationCount as? WidgetResult.Success)?.data ?: 0
+    val tabActions: @Composable RowScope.() -> Unit = {
+        TabBarActions(
+            unreadNotificationCount = unreadCount,
+            onNotificationsClick = { navController.navigate(NOTIFICATIONS_ROUTE) },
+            onUserClick = { showUserSheet = true }
+        )
+    }
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        snackbarHost = {
+            // With the bottom bar hidden (drill-in screens) nothing else keeps the snackbar clear
+            // of the gesture/nav bar, since this Scaffold's own insets are zeroed.
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = if (selectedIndex >= 0) Modifier else Modifier.navigationBarsPadding()
+            )
+        },
         bottomBar = {
             // Only shown on the actual tab destinations - Settings/Notifications/Shares/Server
-            // are drill-in screens reached via an icon or the More sheet, with their own back
+            // are drill-in screens reached via an icon or a sheet, with their own back
             // button, not tabs. Showing the bar there had nothing correct to highlight (it
             // used to fall back to Dashboard) since none of those routes are in bottomNavItem.
             if (selectedIndex >= 0) {
@@ -166,16 +192,23 @@ fun UndroidNavGraph(
             navController = navController,
             startDestination = startDestination,
             modifier = Modifier
-                //.background(color = RickPrimary)
                 .padding(innerPadding)
         ) {
             composable(BottomNavDestination.Dashboard.route) {
                 DashboardScreen(
                     viewModel = dashboardViewModel,
-                    onNotificationsClick = { navController.navigate(NOTIFICATIONS_ROUTE) },
-                    onUserClick = { showUserSheet = true },
+                    topBarActions = tabActions,
                     onShowAllContainers = {
                         navController.navigate(BottomNavDestination.Docker.route) {
+                            popUpTo(navController.graph.findStartDestination().id) {
+                                saveState = true
+                            }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    },
+                    onShowAllVms = {
+                        navController.navigate(BottomNavDestination.Vms.route) {
                             popUpTo(navController.graph.findStartDestination().id) {
                                 saveState = true
                             }
@@ -186,13 +219,13 @@ fun UndroidNavGraph(
                 )
             }
             composable(BottomNavDestination.Main.route) {
-                MainScreen(onUserClick = { showUserSheet = true })
+                MainScreen(topBarActions = tabActions)
             }
             composable(BottomNavDestination.Docker.route) {
-                DockerScreen(onUserClick = { showUserSheet = true })
+                DockerScreen(topBarActions = tabActions)
             }
             composable(BottomNavDestination.Vms.route) {
-                VmsScreen(onUserClick = { showUserSheet = true })
+                VmsScreen(topBarActions = tabActions)
             }
             composable(SHARES_ROUTE) {
                 SharesScreen(onBack = { navController.popBackStack() })
@@ -213,20 +246,15 @@ fun UndroidNavGraph(
     }
 
     if (showMoreSheet) {
-        ModalBottomSheet(
-            onDismissRequest = { showMoreSheet = false },
-            sheetState = moreSheetState
-        ) {
-            MoreMenuContent(
-                onSharesClick = {
-                    showMoreSheet = false
-                    navController.navigate(SHARES_ROUTE)
-                },
-                onServerClick = {
-                    showMoreSheet = false
-                    navController.navigate(SERVER_ROUTE)
-                }
-            )
+        ActionSheet(onDismissRequest = { showMoreSheet = false }) {
+            ActionSheetItem(Icons.Filled.FolderShared, "Shares", {
+                showMoreSheet = false
+                navController.navigate(SHARES_ROUTE)
+            })
+            ActionSheetItem(Icons.Filled.Dns, "Server", {
+                showMoreSheet = false
+                navController.navigate(SERVER_ROUTE)
+            })
         }
     }
 
@@ -250,28 +278,5 @@ fun UndroidNavGraph(
             },
             onLogoutConfirmed = userMenuViewModel::logout
         )
-    }
-}
-
-@Composable
-private fun MoreMenuContent(onSharesClick: () -> Unit, onServerClick: () -> Unit) {
-    MoreMenuItem(icon = Icons.Filled.FolderShared, label = "Shares", onClick = onSharesClick)
-    MoreMenuItem(icon = Icons.Filled.Memory, label = "Server", onClick = onServerClick)
-}
-
-@Composable
-private fun MoreMenuItem(icon: ImageVector, label: String, onClick: () -> Unit) {
-    val spacing = MaterialTheme.spacing
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = spacing.large, vertical = spacing.medium),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.width(spacing.medium))
-        Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-        Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

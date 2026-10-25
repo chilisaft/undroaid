@@ -5,16 +5,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -53,18 +49,11 @@ fun <T> WidgetSection(
 
 @Composable
 private fun WidgetPlaceholder(minHeight: Dp, content: @Composable () -> Unit) {
-    val spacing = MaterialTheme.spacing
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .defaultMinSize(minHeight = minHeight),
-        shape = RoundedCornerShape(spacing.mediumLarge),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
-    ) {
+    AppCard(modifier = Modifier.defaultMinSize(minHeight = minHeight)) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(spacing.medium),
+                .padding(MaterialTheme.spacing.medium),
             contentAlignment = Alignment.Center
         ) {
             content()

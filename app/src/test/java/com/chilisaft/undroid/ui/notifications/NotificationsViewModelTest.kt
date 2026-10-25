@@ -4,9 +4,11 @@ import com.chilisaft.undroid.data.models.Notification
 import com.chilisaft.undroid.data.models.NotificationLevel
 import com.chilisaft.undroid.data.models.WidgetResult
 import com.chilisaft.undroid.data.repository.NotificationsRepository
+import com.chilisaft.undroid.ui.UserMessages
 import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.verify
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -21,6 +23,7 @@ import org.junit.Test
 class NotificationsViewModelTest {
 
     private lateinit var viewModel: NotificationsViewModel
+    private val userMessages: UserMessages = mockk(relaxed = true)
     private lateinit var repository: NotificationsRepository
 
     private val testDispatcher = StandardTestDispatcher()
@@ -49,13 +52,13 @@ class NotificationsViewModelTest {
 
     @Test
     fun `initial state is loading`() {
-        viewModel = NotificationsViewModel(repository)
+        viewModel = NotificationsViewModel(repository, userMessages)
         assertThat(viewModel.uiState.value.notifications).isEqualTo(WidgetResult.Loading)
     }
 
     @Test
     fun `loads the notification list`() {
-        viewModel = NotificationsViewModel(repository)
+        viewModel = NotificationsViewModel(repository, userMessages)
         testDispatcher.scheduler.advanceUntilIdle()
 
         assertThat(viewModel.uiState.value.notifications).isEqualTo(WidgetResult.Success(listOf(testNotification)))
@@ -64,7 +67,7 @@ class NotificationsViewModelTest {
     @Test
     fun `dismiss archives the given id, tracks it while in flight, and reloads on success`() {
         coEvery { repository.archiveNotification("n1") } returns WidgetResult.Success(Unit)
-        viewModel = NotificationsViewModel(repository)
+        viewModel = NotificationsViewModel(repository, userMessages)
         testDispatcher.scheduler.advanceUntilIdle()
 
         coEvery { repository.getNotifications() } returns WidgetResult.Success(emptyList())
@@ -77,14 +80,15 @@ class NotificationsViewModelTest {
     }
 
     @Test
-    fun `dismiss leaves the list untouched on failure`() {
+    fun `dismiss leaves the list untouched on failure and tells the user why`() {
         coEvery { repository.archiveNotification("n1") } returns WidgetResult.Failure(permissionDenied = true, message = null)
-        viewModel = NotificationsViewModel(repository)
+        viewModel = NotificationsViewModel(repository, userMessages)
         testDispatcher.scheduler.advanceUntilIdle()
 
         viewModel.dismiss("n1")
         testDispatcher.scheduler.advanceUntilIdle()
 
+        verify { userMessages.showFailure("dismiss the notification", any()) }
         coVerify(exactly = 1) { repository.getNotifications() }
         assertThat(viewModel.uiState.value.notifications).isEqualTo(WidgetResult.Success(listOf(testNotification)))
         assertThat(viewModel.uiState.value.dismissingIds).isEmpty()
@@ -93,7 +97,7 @@ class NotificationsViewModelTest {
     @Test
     fun `dismissAll archives everything and reloads on success`() {
         coEvery { repository.archiveAllNotifications() } returns WidgetResult.Success(Unit)
-        viewModel = NotificationsViewModel(repository)
+        viewModel = NotificationsViewModel(repository, userMessages)
         testDispatcher.scheduler.advanceUntilIdle()
 
         coEvery { repository.getNotifications() } returns WidgetResult.Success(emptyList())
@@ -108,7 +112,7 @@ class NotificationsViewModelTest {
     @Test
     fun `dismissAll leaves the list untouched on failure`() {
         coEvery { repository.archiveAllNotifications() } returns WidgetResult.Failure(permissionDenied = false, message = "boom")
-        viewModel = NotificationsViewModel(repository)
+        viewModel = NotificationsViewModel(repository, userMessages)
         testDispatcher.scheduler.advanceUntilIdle()
 
         viewModel.dismissAll()

@@ -3,10 +3,11 @@ package com.chilisaft.undroid.ui.dashboard
 import android.content.res.Configuration
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.Dns
+import androidx.compose.material.icons.filled.Memory
+import androidx.compose.material.icons.filled.Reorder
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
@@ -18,25 +19,36 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleStartEffect
 import com.chilisaft.undroid.data.models.ArrayStatus
 import com.chilisaft.undroid.data.models.DockerContainerState
 import com.chilisaft.undroid.data.models.DockerContainerSummary
 import com.chilisaft.undroid.data.models.ParityCheckInfo
 import com.chilisaft.undroid.data.models.SystemMetrics
+import com.chilisaft.undroid.data.models.VmDomain
+import com.chilisaft.undroid.data.models.VmRunState
 import com.chilisaft.undroid.data.models.WidgetResult
+import com.chilisaft.undroid.ui.components.AppCard
 import com.chilisaft.undroid.ui.components.ContainerIconBadge
-import com.chilisaft.undroid.ui.components.ScreenTitle
+import com.chilisaft.undroid.ui.components.EmptyState
+import com.chilisaft.undroid.ui.components.ParityCheckProgress
+import com.chilisaft.undroid.ui.components.ResourceItemSize
+import com.chilisaft.undroid.ui.components.ResourceListItem
+import com.chilisaft.undroid.ui.components.ScreenList
+import com.chilisaft.undroid.ui.components.TabTopBar
+import com.chilisaft.undroid.ui.components.VmIconBadge
 import com.chilisaft.undroid.ui.components.WidgetSection
+import com.chilisaft.undroid.ui.components.label
+import com.chilisaft.undroid.ui.components.statusTone
 import com.chilisaft.undroid.ui.theme.AppTheme
 import com.chilisaft.undroid.ui.theme.spacing
-import com.chilisaft.undroid.utils.estimatedSecondsRemaining
 import com.chilisaft.undroid.utils.kilobytesToHumanReadable
-import com.chilisaft.undroid.utils.toRemainingTimeLabel
 import com.chilisaft.undroid.utils.toUptimeLabel
 import java.time.Instant
 import kotlinx.coroutines.delay
@@ -44,20 +56,26 @@ import kotlinx.coroutines.delay
 @Composable
 fun DashboardScreen(
     viewModel: DashboardViewModel = hiltViewModel(),
-    onNotificationsClick: () -> Unit = {},
-    onUserClick: () -> Unit = {},
-    onShowAllContainers: () -> Unit = {}
+    topBarActions: @Composable RowScope.() -> Unit = {},
+    onShowAllContainers: () -> Unit = {},
+    onShowAllVms: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    // Live polling only while this screen is actually showing - see DashboardViewModel.onScreenVisible.
+    LifecycleStartEffect(viewModel) {
+        viewModel.onScreenVisible()
+        onStopOrDispose { viewModel.onScreenHidden() }
+    }
     DashboardScreenContent(
         uiState = uiState,
-        onNotificationsClick = onNotificationsClick,
-        onUserClick = onUserClick,
+        topBarActions = topBarActions,
         onShowAllContainers = onShowAllContainers,
+        onShowAllVms = onShowAllVms,
         onRefresh = viewModel::refresh,
         onRetryArrayStatus = viewModel::refreshArrayStatus,
         onRetrySystemMetrics = viewModel::refreshSystemMetrics,
-        onRetryContainers = viewModel::refreshContainers
+        onRetryContainers = viewModel::refreshContainers,
+        onRetryVms = viewModel::refreshVms
     )
 }
 
@@ -65,57 +83,28 @@ fun DashboardScreen(
 @Composable
 fun DashboardScreenContent(
     uiState: DashboardScreenState,
-    onNotificationsClick: () -> Unit = {},
-    onUserClick: () -> Unit = {},
+    topBarActions: @Composable RowScope.() -> Unit = {},
     onShowAllContainers: () -> Unit = {},
+    onShowAllVms: () -> Unit = {},
     onRefresh: () -> Unit = {},
     onRetryArrayStatus: () -> Unit = {},
     onRetrySystemMetrics: () -> Unit = {},
-    onRetryContainers: () -> Unit = {}
+    onRetryContainers: () -> Unit = {},
+    onRetryVms: () -> Unit = {}
 ) {
     val spacing = MaterialTheme.spacing
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { ScreenTitle(Icons.Filled.Dns, uiState.serverName ?: "Tower Command") },
-                actions = {
-                    val unreadCount = (uiState.unreadNotificationCount as? WidgetResult.Success)?.data ?: 0
-                    IconButton(onClick = onNotificationsClick) {
-                        BadgedBox(badge = {
-                            if (unreadCount > 0) {
-                                Badge { Text(if (unreadCount > 99) "99+" else unreadCount.toString()) }
-                            }
-                        }) {
-                            Icon(Icons.Filled.Notifications, contentDescription = "Notifications")
-                        }
-                    }
-                    IconButton(onClick = onUserClick) {
-                        Icon(Icons.Filled.AccountCircle, contentDescription = "Account")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f)
-                )
-            )
-        }
+        topBar = { TabTopBar(title = uiState.serverName ?: "Dashboard", icon = Icons.Filled.Dns, actions = topBarActions) }
     ) { padding ->
-        val isRefreshing = uiState.arrayStatus is WidgetResult.Loading ||
-            uiState.systemMetrics is WidgetResult.Loading ||
-            uiState.containers is WidgetResult.Loading
         PullToRefreshBox(
-            isRefreshing = isRefreshing,
+            isRefreshing = uiState.isRefreshing,
             onRefresh = onRefresh,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .padding(horizontal = spacing.medium)
         ) {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = spacing.medium),
-                verticalArrangement = Arrangement.spacedBy(spacing.medium)
-            ) {
-
+            ScreenList {
                 item {
                     // Boot time only changes on a reboot, so recompute the elapsed label
                     // independently of the systemMetrics widget's own load/poll cadence.
@@ -147,34 +136,79 @@ fun DashboardScreenContent(
 
                 item {
                     WidgetSection(result = uiState.containers, onRetry = onRetryContainers, minHeight = 80.dp) { containers ->
-                        DockerCard(containers = containers, onShowAll = onShowAllContainers)
+                        ResourcePreviewCard(
+                            title = "Docker",
+                            items = containers,
+                            countsLabel = stateCountsLabel(
+                                running = containers.count { it.state == DockerContainerState.RUNNING },
+                                paused = containers.count { it.state == DockerContainerState.PAUSED },
+                                stopped = containers.count { it.state == DockerContainerState.EXITED }
+                            ),
+                            emptyText = "No containers found",
+                            onShowAll = onShowAllContainers
+                        ) { container ->
+                            ResourceListItem(
+                                title = container.name,
+                                tone = container.state.statusTone,
+                                statusText = container.state.label,
+                                size = ResourceItemSize.Compact,
+                                leading = { size ->
+                                    ContainerIconBadge(container.iconUrl, isRunning = container.state == DockerContainerState.RUNNING, size = size)
+                                },
+                                modifier = Modifier.padding(horizontal = spacing.medium, vertical = spacing.small)
+                            )
+                        }
                     }
                 }
 
-                item { Spacer(Modifier.height(spacing.extraLarge)) }
+                item {
+                    WidgetSection(result = uiState.vms, onRetry = onRetryVms, minHeight = 80.dp) { vms ->
+                        ResourcePreviewCard(
+                            title = "Virtual Machines",
+                            items = vms,
+                            countsLabel = stateCountsLabel(
+                                running = vms.count { it.state == VmRunState.RUNNING },
+                                paused = vms.count { it.state == VmRunState.PAUSED },
+                                stopped = vms.count { it.state == VmRunState.STOPPED }
+                            ),
+                            emptyText = "No virtual machines found",
+                            onShowAll = onShowAllVms
+                        ) { vm ->
+                            ResourceListItem(
+                                title = vm.name,
+                                tone = vm.statusTone,
+                                statusText = vm.statusLabel,
+                                size = ResourceItemSize.Compact,
+                                leading = { size -> VmIconBadge(state = vm.state, size = size) },
+                                modifier = Modifier.padding(horizontal = spacing.medium, vertical = spacing.small)
+                            )
+                        }
+                    }
+                }
             }
         }
     }
 }
 
+/**
+ * The Dashboard's hero card, on a brand gradient. The gradient runs from `primary` a third of the
+ * way towards `onPrimaryContainer` - darker in light mode, lighter in dark mode, i.e. always
+ * *away* from `onPrimary` - so the white/dark text on top keeps its contrast across the whole
+ * card. (It used to fade into the very pale `primaryFixed`, which washed out the right-hand
+ * column's text in light mode.)
+ */
 @Composable
-fun ArrayStatusCard(status: ArrayStatus, uptimeLabel: String?) {
+private fun ArrayStatusCard(status: ArrayStatus, uptimeLabel: String?) {
     val spacing = MaterialTheme.spacing
+    val colors = MaterialTheme.colorScheme
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(spacing.mediumLarge),
+        shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = Color.Transparent)
     ) {
         Box(
             modifier = Modifier
-                .background(
-                    Brush.linearGradient(
-                        colors = listOf(
-                            MaterialTheme.colorScheme.primary,
-                            MaterialTheme.colorScheme.primaryFixed
-                        )
-                    )
-                )
+                .background(Brush.linearGradient(listOf(colors.primary, lerp(colors.primary, colors.onPrimaryContainer, 0.35f))))
                 .padding(spacing.large)
         ) {
             Column {
@@ -184,21 +218,20 @@ fun ArrayStatusCard(status: ArrayStatus, uptimeLabel: String?) {
                     verticalAlignment = Alignment.Top
                 ) {
                     Column {
-                        Text("ARRAY STATUS", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f), fontWeight = FontWeight.Bold)
-                        Text(status.statusLabel, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Black)
+                        Text("ARRAY STATUS", style = MaterialTheme.typography.labelSmall, color = colors.onPrimary.copy(alpha = 0.7f))
+                        Text(status.statusLabel, style = MaterialTheme.typography.titleLarge, color = colors.onPrimary)
                     }
-                    Surface(
-                        color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.15f),
-                        shape = RoundedCornerShape(50)
-                    ) {
-                        Row(modifier = Modifier.padding(horizontal = spacing.small, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Box(modifier = Modifier.size(6.dp).background(MaterialTheme.colorScheme.onPrimary, RoundedCornerShape(50)))
+                    Surface(color = colors.onPrimary.copy(alpha = 0.15f), shape = CircleShape) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = spacing.small, vertical = spacing.extraSmall),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(modifier = Modifier.size(6.dp).background(colors.onPrimary, CircleShape))
                             Spacer(Modifier.width(spacing.extraSmall))
                             Text(
                                 if (status.healthy) "HEALTH: OK" else "HEALTH: ISSUE",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onPrimary,
-                                fontWeight = FontWeight.Bold
+                                color = colors.onPrimary
                             )
                         }
                     }
@@ -206,7 +239,7 @@ fun ArrayStatusCard(status: ArrayStatus, uptimeLabel: String?) {
                 Spacer(Modifier.height(spacing.small))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     InfoColumn("UPTIME", uptimeLabel ?: "—")
-                    Box(modifier = Modifier.width(1.dp).height(spacing.extraLarge).background(MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.2f)))
+                    Box(modifier = Modifier.width(1.dp).height(spacing.extraLarge).background(colors.onPrimary.copy(alpha = 0.2f)))
                     InfoColumn("STORAGE USED", formatStorage(status.usedKb, status.totalKb))
                 }
             }
@@ -222,40 +255,8 @@ fun ArrayStatusCard(status: ArrayStatus, uptimeLabel: String?) {
  */
 @Composable
 private fun ParityCheckBanner(parityCheck: ParityCheckInfo, paritySizeKb: Long?) {
-    val spacing = MaterialTheme.spacing
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-        shape = RoundedCornerShape(spacing.mediumLarge)
-    ) {
-        val accentColor = if (parityCheck.paused) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary
-        Column(modifier = Modifier.padding(spacing.medium), verticalArrangement = Arrangement.spacedBy(spacing.extraSmall)) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text("Parity Check", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-                Text(
-                    "${parityCheck.progressPercent ?: 0}%",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = accentColor
-                )
-            }
-            LinearProgressIndicator(
-                progress = { (parityCheck.progressPercent ?: 0) / 100f },
-                modifier = Modifier.fillMaxWidth(),
-                color = accentColor
-            )
-            Text(
-                text = buildString {
-                    append(if (parityCheck.paused) "Paused" else "Running")
-                    parityCheck.speed?.let { append(" · $it MB/s") }
-                    estimatedSecondsRemaining(parityCheck.progressPercent, parityCheck.speed, paritySizeKb)?.let {
-                        append(" · ~${it.toRemainingTimeLabel()} remaining")
-                    }
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
+    AppCard {
+        ParityCheckProgress(parityCheck, paritySizeKb, modifier = Modifier.padding(MaterialTheme.spacing.medium))
     }
 }
 
@@ -291,36 +292,45 @@ private fun SystemMetricsRow(metrics: SystemMetrics) {
     }
 }
 
-private const val MAX_VISIBLE_CONTAINERS = 3
+private const val MAX_PREVIEW_ITEMS = 3
 
+/**
+ * A Dashboard summary of one resource list (Docker, VMs): title and per-state counts sharing the
+ * header row, the first [MAX_PREVIEW_ITEMS] items, and a "Show All" button when there are more.
+ * The whole card jumps to the full tab.
+ */
 @Composable
-private fun DockerCard(containers: List<DockerContainerSummary>, onShowAll: () -> Unit) {
+private fun <T> ResourcePreviewCard(
+    title: String,
+    items: List<T>,
+    countsLabel: String?,
+    emptyText: String,
+    onShowAll: () -> Unit,
+    row: @Composable (T) -> Unit
+) {
     val spacing = MaterialTheme.spacing
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-        shape = RoundedCornerShape(spacing.mediumLarge)
-    ) {
+    AppCard(onClick = onShowAll) {
         Column(modifier = Modifier.padding(vertical = spacing.small)) {
-            DockerCardHeader(
-                containers = containers,
-                modifier = Modifier.padding(horizontal = spacing.medium, vertical = spacing.extraSmall)
-            )
-            HorizontalDivider(modifier = Modifier.padding(horizontal = spacing.medium))
-            if (containers.isEmpty()) {
-                Text(
-                    text = "No containers configured",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(spacing.medium)
-                )
-            } else {
-                containers.take(MAX_VISIBLE_CONTAINERS).forEach { container ->
-                    DockerRow(container.name, container.state, container.iconUrl)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = spacing.medium, vertical = spacing.extraSmall),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(title, style = MaterialTheme.typography.titleMedium)
+                if (countsLabel != null) {
+                    Text(countsLabel, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                if (containers.size > MAX_VISIBLE_CONTAINERS) {
+            }
+            HorizontalDivider(modifier = Modifier.padding(horizontal = spacing.medium))
+            if (items.isEmpty()) {
+                EmptyState(emptyText, modifier = Modifier.fillMaxWidth().padding(spacing.medium))
+            } else {
+                items.take(MAX_PREVIEW_ITEMS).forEach { row(it) }
+                if (items.size > MAX_PREVIEW_ITEMS) {
                     TextButton(onClick = onShowAll, modifier = Modifier.fillMaxWidth()) {
-                        Text("SHOW ALL (${containers.size})", style = MaterialTheme.typography.labelLarge)
+                        Text("Show All (${items.size})")
                     }
                 }
             }
@@ -328,36 +338,8 @@ private fun DockerCard(containers: List<DockerContainerSummary>, onShowAll: () -
     }
 }
 
-/**
- * "Docker" title and the running/paused/stopped counts share one row (right-aligned counts)
- * instead of the title living outside the card and the counts on their own line below it - cuts
- * the dead space that left on a title-only row and a counts-only row, each using a fraction of
- * the card's width.
- */
-@Composable
-private fun DockerCardHeader(containers: List<DockerContainerSummary>, modifier: Modifier = Modifier) {
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text("Docker", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        dockerCountsLabel(containers)?.let { label ->
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
-
-/** Omits any state with a zero count, so an all-running (the common case) list just reads "N Running". Null when there are no containers at all. */
-private fun dockerCountsLabel(containers: List<DockerContainerSummary>): String? {
-    val running = containers.count { it.state == DockerContainerState.RUNNING }
-    val paused = containers.count { it.state == DockerContainerState.PAUSED }
-    val stopped = containers.count { it.state == DockerContainerState.EXITED }
+/** Omits any state with a zero count, so an all-running (the common case) list just reads "N Running". Null when there's nothing at all. */
+private fun stateCountsLabel(running: Int, paused: Int, stopped: Int): String? {
     val parts = buildList {
         if (running > 0) add("$running Running")
         if (paused > 0) add("$paused Paused")
@@ -372,24 +354,20 @@ private fun formatStorage(usedKb: Long?, totalKb: Long?): String {
 }
 
 @Composable
-fun MetricCard(modifier: Modifier, label: String, percent: Double?, icon: ImageVector, color: Color) {
+private fun MetricCard(modifier: Modifier, label: String, percent: Double?, icon: ImageVector, color: Color) {
     val spacing = MaterialTheme.spacing
     val roundedPercent = percent?.let { Math.round(it).toInt() }
-    Card(
-        modifier = modifier,
-        shape = RoundedCornerShape(spacing.mediumLarge),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
-    ) {
+    AppCard(modifier = modifier) {
         Column(modifier = Modifier.padding(spacing.medium)) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold)
+                Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(18.dp))
             }
             Spacer(Modifier.height(spacing.small))
             Row(verticalAlignment = Alignment.Bottom) {
-                Text(roundedPercent?.toString() ?: "—", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Black)
+                Text(roundedPercent?.toString() ?: "—", style = MaterialTheme.typography.headlineLarge)
                 if (roundedPercent != null) {
-                    Text("%", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(bottom = 6.dp, start = 4.dp))
+                    Text("%", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(bottom = 6.dp, start = spacing.extraSmall))
                 }
             }
             Spacer(Modifier.height(spacing.itemSpacing))
@@ -398,58 +376,17 @@ fun MetricCard(modifier: Modifier, label: String, percent: Double?, icon: ImageV
                 modifier = Modifier.fillMaxWidth().height(spacing.itemSpacing),
                 color = color,
                 trackColor = color.copy(alpha = 0.2f),
-                strokeCap = androidx.compose.ui.graphics.StrokeCap.Round
+                strokeCap = StrokeCap.Round
             )
         }
     }
 }
 
 @Composable
-fun InfoColumn(label: String, value: String) {
+private fun InfoColumn(label: String, value: String) {
     Column {
-        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.6f), fontWeight = FontWeight.Bold)
-        Text(value, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold)
-    }
-}
-
-
-@Composable
-fun DockerRow(name: String, state: DockerContainerState, iconUrl: String? = null) {
-    val spacing = MaterialTheme.spacing
-    val isRunning = state == DockerContainerState.RUNNING
-    val (dotColor, label) = when (state) {
-        DockerContainerState.RUNNING -> Color(0xFF4CAF50) to "RUNNING"
-        DockerContainerState.PAUSED -> MaterialTheme.colorScheme.tertiary to "PAUSED"
-        DockerContainerState.EXITED -> MaterialTheme.colorScheme.error to "STOPPED"
-    }
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = spacing.medium, vertical = spacing.small),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            ContainerIconBadge(iconUrl = iconUrl, isRunning = isRunning)
-            Spacer(Modifier.width(spacing.medium))
-            Column {
-                Text(name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(6.dp)
-                            .background(color = dotColor, shape = RoundedCornerShape(50))
-                    )
-                    Spacer(Modifier.width(spacing.extraSmall))
-                    Text(
-                        text = label,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-        }
+        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.6f))
+        Text(value, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimary)
     }
 }
 
@@ -480,6 +417,11 @@ private val previewContainers = listOf(
     DockerContainerSummary("Pi-hole", state = DockerContainerState.RUNNING, iconUrl = null)
 )
 
+private val previewVms = listOf(
+    VmDomain(id = "1", name = "Windows 11", state = VmRunState.RUNNING, statusLabel = "Running"),
+    VmDomain(id = "2", name = "Ubuntu Server", state = VmRunState.STOPPED, statusLabel = "Shut Off")
+)
+
 @Preview(name = "Light Mode", showBackground = true)
 @Preview(name = "Dark Mode", showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
 @Composable
@@ -492,6 +434,7 @@ fun DashboardPreview() {
                 parityCheck = WidgetResult.Success(previewParityCheckIdle),
                 systemMetrics = WidgetResult.Success(previewSystemMetrics),
                 containers = WidgetResult.Success(previewContainers),
+                vms = WidgetResult.Success(previewVms),
                 unreadNotificationCount = WidgetResult.Success(3)
             )
         )
@@ -522,6 +465,7 @@ fun DashboardParityCheckRunningPreview() {
                 ),
                 systemMetrics = WidgetResult.Success(previewSystemMetrics),
                 containers = WidgetResult.Success(previewContainers),
+                vms = WidgetResult.Success(previewVms),
                 unreadNotificationCount = WidgetResult.Success(3)
             )
         )
@@ -538,7 +482,8 @@ fun DashboardPartialFailurePreview() {
                 arrayStatus = WidgetResult.Success(previewArrayStatus),
                 parityCheck = WidgetResult.Success(previewParityCheckIdle),
                 systemMetrics = WidgetResult.Failure(permissionDenied = true, message = null),
-                containers = WidgetResult.Failure(permissionDenied = false, message = "Network error")
+                containers = WidgetResult.Failure(permissionDenied = false, message = "Network error"),
+                vms = WidgetResult.Failure(permissionDenied = false, message = "Network error")
             )
         )
     }

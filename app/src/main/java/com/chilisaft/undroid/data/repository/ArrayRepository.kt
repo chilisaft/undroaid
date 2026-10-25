@@ -22,14 +22,12 @@ import com.chilisaft.undroid.graphql.ParityCheckResumeMutation
 import com.chilisaft.undroid.graphql.ParityCheckStartMutation
 import com.chilisaft.undroid.graphql.ParityCheckStatusQuery
 import com.chilisaft.undroid.graphql.SystemDisksQuery
-import com.chilisaft.undroid.graphql.type.ArrayDiskStatus
 import com.chilisaft.undroid.graphql.type.ArrayDiskType
 import com.chilisaft.undroid.graphql.type.ArrayState
 import com.chilisaft.undroid.graphql.type.ArrayStateInput
 import com.chilisaft.undroid.graphql.type.ArrayStateInputState
 import com.chilisaft.undroid.graphql.type.DiskInterfaceType
 import com.chilisaft.undroid.graphql.type.DiskSmartStatus
-import com.chilisaft.undroid.graphql.type.ParityCheckStatus
 import javax.inject.Inject
 
 /** Backs the Main tab - array/parity/cache/boot device tables plus array/parity-check control. */
@@ -102,6 +100,7 @@ class ArrayRepository @Inject constructor(
         usedKb = fsUsed?.toLongOrNull(),
         freeKb = fsFree?.toLongOrNull(),
         statusLabel = status?.toLabel(),
+        health = status.toDeviceHealth(),
         tempC = temp,
         isSpinning = isSpinning,
         fsType = fsType,
@@ -116,43 +115,10 @@ class ArrayRepository @Inject constructor(
         interfaceType = interfaceType.toLabel(),
         smartStatus = smartStatus.toLabel()
     )
-
-    /**
-     * The server's `running`/`paused` booleans and its `status` enum are apparently derived
-     * somewhat independently (confirmed against a real server: `status` correctly read RUNNING
-     * while `running` was false/null in the same response) - ORing each boolean with the
-     * matching enum value means either signal being right is enough, rather than trusting the
-     * booleans alone and silently hiding an active check.
-     */
-    private fun ParityCheckStatusQuery.ParityCheckStatus.toParityCheckInfo() = ParityCheckInfo(
-        statusLabel = status.toLabel(),
-        running = (running ?: false) || status == ParityCheckStatus.RUNNING,
-        paused = (paused ?: false) || status == ParityCheckStatus.PAUSED,
-        progressPercent = progress,
-        speed = speed,
-        errors = errors,
-        correcting = correcting
-    )
-
     private fun ArrayState.toRunState(): ArrayRunState = when (this) {
         ArrayState.STARTED -> ArrayRunState.STARTED
         ArrayState.STOPPED -> ArrayRunState.STOPPED
         else -> ArrayRunState.OTHER
-    }
-
-    private fun ArrayState.toLabel(): String = when (this) {
-        ArrayState.STARTED -> "Array Started"
-        ArrayState.STOPPED -> "Array Stopped"
-        ArrayState.NEW_ARRAY -> "New Array"
-        ArrayState.RECON_DISK -> "Reconstructing Disk"
-        ArrayState.DISABLE_DISK -> "Disk Disabled"
-        ArrayState.SWAP_DSBL -> "Disk Swap Pending"
-        ArrayState.INVALID_EXPANSION -> "Invalid Expansion"
-        ArrayState.PARITY_NOT_BIGGEST -> "Parity Too Small"
-        ArrayState.TOO_MANY_MISSING_DISKS -> "Too Many Missing Disks"
-        ArrayState.NEW_DISK_TOO_SMALL -> "New Disk Too Small"
-        ArrayState.NO_DATA_DISKS -> "No Data Disks"
-        ArrayState.UNKNOWN__ -> "Unknown"
     }
 
     private fun ArrayDiskType.toRole(): ArrayDeviceRole = when (this) {
@@ -162,29 +128,6 @@ class ArrayRepository @Inject constructor(
         ArrayDiskType.FLASH -> ArrayDeviceRole.FLASH
         ArrayDiskType.CACHE -> ArrayDeviceRole.CACHE
         ArrayDiskType.UNKNOWN__ -> ArrayDeviceRole.DATA
-    }
-
-    private fun ArrayDiskStatus.toLabel(): String = when (this) {
-        ArrayDiskStatus.DISK_NP -> "Not Present"
-        ArrayDiskStatus.DISK_OK -> "OK"
-        ArrayDiskStatus.DISK_NP_MISSING -> "Missing"
-        ArrayDiskStatus.DISK_INVALID -> "Invalid"
-        ArrayDiskStatus.DISK_WRONG -> "Wrong Disk"
-        ArrayDiskStatus.DISK_DSBL -> "Disabled"
-        ArrayDiskStatus.DISK_NP_DSBL -> "Disabled (Missing)"
-        ArrayDiskStatus.DISK_DSBL_NEW -> "Disabled (New)"
-        ArrayDiskStatus.DISK_NEW -> "New Disk"
-        ArrayDiskStatus.UNKNOWN__ -> "Unknown"
-    }
-
-    private fun ParityCheckStatus.toLabel(): String = when (this) {
-        ParityCheckStatus.NEVER_RUN -> "Never Run"
-        ParityCheckStatus.RUNNING -> "Running"
-        ParityCheckStatus.PAUSED -> "Paused"
-        ParityCheckStatus.COMPLETED -> "Completed"
-        ParityCheckStatus.CANCELLED -> "Cancelled"
-        ParityCheckStatus.FAILED -> "Failed"
-        ParityCheckStatus.UNKNOWN__ -> "Unknown"
     }
 
     private fun DiskInterfaceType.toLabel(): String = when (this) {

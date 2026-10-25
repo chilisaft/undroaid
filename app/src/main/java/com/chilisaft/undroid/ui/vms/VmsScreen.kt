@@ -1,22 +1,20 @@
 package com.chilisaft.undroid.ui.vms
 
 import android.content.res.Configuration
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Computer
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material3.*
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -24,31 +22,39 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleStartEffect
 import com.chilisaft.undroid.data.models.VmDomain
 import com.chilisaft.undroid.data.models.VmRunState
 import com.chilisaft.undroid.data.models.WidgetResult
-import com.chilisaft.undroid.ui.components.ScreenTitle
+import com.chilisaft.undroid.ui.components.ActionSheet
+import com.chilisaft.undroid.ui.components.ActionSheetItem
+import com.chilisaft.undroid.ui.components.ConfirmActionDialog
+import com.chilisaft.undroid.ui.components.EmptyState
+import com.chilisaft.undroid.ui.components.ResourceHeaderCard
+import com.chilisaft.undroid.ui.components.ResourceRowCard
+import com.chilisaft.undroid.ui.components.ScreenList
+import com.chilisaft.undroid.ui.components.TabTopBar
+import com.chilisaft.undroid.ui.components.VmIconBadge
 import com.chilisaft.undroid.ui.components.WidgetSection
+import com.chilisaft.undroid.ui.components.statusTone
 import com.chilisaft.undroid.ui.theme.AppTheme
 import com.chilisaft.undroid.ui.theme.spacing
 
 @Composable
-fun VmsScreen(viewModel: VmsViewModel = hiltViewModel(), onUserClick: () -> Unit = {}) {
+fun VmsScreen(viewModel: VmsViewModel = hiltViewModel(), topBarActions: @Composable RowScope.() -> Unit = {}) {
     val uiState by viewModel.uiState.collectAsState()
+    LifecycleStartEffect(viewModel) {
+        viewModel.onScreenVisible()
+        onStopOrDispose { }
+    }
     VmsScreenContent(
         uiState = uiState,
         onRetry = viewModel::refresh,
-        onUserClick = onUserClick,
+        topBarActions = topBarActions,
         onStart = viewModel::start,
         onStop = viewModel::stop,
         onForceStop = viewModel::forceStop,
@@ -63,7 +69,7 @@ fun VmsScreen(viewModel: VmsViewModel = hiltViewModel(), onUserClick: () -> Unit
 fun VmsScreenContent(
     uiState: VmsScreenState,
     onRetry: () -> Unit = {},
-    onUserClick: () -> Unit = {},
+    topBarActions: @Composable RowScope.() -> Unit = {},
     onStart: (String) -> Unit = {},
     onStop: (String) -> Unit = {},
     onForceStop: (String) -> Unit = {},
@@ -73,21 +79,13 @@ fun VmsScreenContent(
 ) {
     val spacing = MaterialTheme.spacing
     var selectedVm by remember { mutableStateOf<VmDomain?>(null) }
+    var forceStopCandidate by remember { mutableStateOf<VmDomain?>(null) }
 
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { ScreenTitle(Icons.Filled.Computer, "Virtual Machines") },
-                actions = {
-                    IconButton(onClick = onUserClick) {
-                        Icon(Icons.Filled.AccountCircle, contentDescription = "Account")
-                    }
-                }
-            )
-        }
+        topBar = { TabTopBar(title = "VMs", icon = Icons.Filled.Computer, actions = topBarActions) }
     ) { padding ->
         PullToRefreshBox(
-            isRefreshing = uiState.vms is WidgetResult.Loading,
+            isRefreshing = uiState.isRefreshing,
             onRefresh = onRetry,
             modifier = Modifier
                 .fillMaxSize()
@@ -96,23 +94,17 @@ fun VmsScreenContent(
         ) {
             WidgetSection(result = uiState.vms, onRetry = onRetry, minHeight = 200.dp) { vms ->
                 if (vms.isEmpty()) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text(
-                            text = "No virtual machines found",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    EmptyState("No virtual machines found")
                 } else {
-                    LazyColumn(
-                        verticalArrangement = Arrangement.spacedBy(spacing.itemSpacing),
-                        contentPadding = PaddingValues(vertical = spacing.medium)
-                    ) {
+                    ScreenList {
                         items(vms, key = { it.id }) { vm ->
-                            VmRow(
-                                vm = vm,
+                            ResourceRowCard(
+                                title = vm.name,
+                                tone = vm.statusTone,
+                                statusText = vm.statusLabel,
                                 isActioning = vm.id in uiState.actioningIds,
-                                onClick = { selectedVm = vm }
+                                onClick = { selectedVm = vm },
+                                leading = { size -> VmIconBadge(state = vm.state, size = size) }
                             )
                         }
                     }
@@ -128,92 +120,26 @@ fun VmsScreenContent(
             onDismiss = { selectedVm = null },
             onStart = { onStart(vm.id); selectedVm = null },
             onStop = { onStop(vm.id); selectedVm = null },
-            onForceStop = { onForceStop(vm.id); selectedVm = null },
+            onForceStop = { forceStopCandidate = vm; selectedVm = null },
             onPause = { onPause(vm.id); selectedVm = null },
             onResume = { onResume(vm.id); selectedVm = null },
             onReboot = { onReboot(vm.id); selectedVm = null }
         )
     }
-}
 
-@Composable
-private fun VmRunState.dotColor(): Color = when (this) {
-    VmRunState.RUNNING -> Color(0xFF4CAF50)
-    VmRunState.PAUSED -> MaterialTheme.colorScheme.tertiary
-    VmRunState.STOPPED -> Color(0xFF9E9E9E)
-}
-
-@Composable
-private fun VmIconBadge(state: VmRunState, size: Dp = 40.dp) {
-    val tint = if (state == VmRunState.RUNNING) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-    Surface(
-        modifier = Modifier.size(size),
-        color = MaterialTheme.colorScheme.surfaceContainerHighest,
-        shape = RoundedCornerShape(12.dp)
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Icon(Icons.Filled.Computer, contentDescription = null, tint = tint, modifier = Modifier.size(size * 0.5f))
-        }
+    val candidate = forceStopCandidate
+    if (candidate != null) {
+        ConfirmActionDialog(
+            title = "Force stop ${candidate.name}?",
+            text = "This cuts the VM's power immediately instead of asking it to shut down. Anything unsaved inside it is lost.",
+            confirmLabel = "Force Stop",
+            onConfirm = { onForceStop(candidate.id) },
+            onDismiss = { forceStopCandidate = null },
+            destructive = true
+        )
     }
 }
 
-@Composable
-private fun VmRow(vm: VmDomain, isActioning: Boolean, onClick: () -> Unit) {
-    val spacing = MaterialTheme.spacing
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(enabled = !isActioning, onClick = onClick),
-        shape = RoundedCornerShape(spacing.mediumLarge),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = spacing.medium, vertical = spacing.medium),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            VmIconBadge(state = vm.state, size = 52.dp)
-            Spacer(Modifier.width(spacing.mediumLarge))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    vm.name,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(Modifier.height(spacing.extraSmall))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .background(color = vm.state.dotColor(), shape = RoundedCornerShape(50))
-                    )
-                    Spacer(Modifier.width(spacing.extraSmall))
-                    Text(
-                        text = vm.statusLabel,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-            Spacer(Modifier.width(spacing.medium))
-            if (isActioning) {
-                CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
-            } else {
-                Icon(
-                    Icons.Filled.MoreVert,
-                    contentDescription = "Actions",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(22.dp)
-                )
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun VmActionSheet(
     vm: VmDomain,
@@ -225,95 +151,42 @@ private fun VmActionSheet(
     onResume: () -> Unit,
     onReboot: () -> Unit
 ) {
-    val spacing = MaterialTheme.spacing
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(modifier = Modifier.padding(bottom = spacing.large)) {
-            VmInfoCard(vm = vm, modifier = Modifier.padding(horizontal = spacing.medium))
-            Spacer(Modifier.height(spacing.small))
-            when (vm.state) {
-                VmRunState.RUNNING -> {
-                    ActionSheetItem(Icons.Filled.RestartAlt, "Restart", onReboot)
-                    ActionSheetItem(Icons.Filled.Pause, "Pause", onPause)
-                    ActionSheetItem(Icons.Filled.Stop, "Stop", onStop)
-                    ActionSheetItem(Icons.Filled.PowerSettingsNew, "Force Stop", onForceStop)
-                }
-                VmRunState.PAUSED -> {
-                    ActionSheetItem(Icons.Filled.RestartAlt, "Restart", onReboot)
-                    ActionSheetItem(Icons.Filled.PlayArrow, "Resume", onResume)
-                    ActionSheetItem(Icons.Filled.Stop, "Stop", onStop)
-                    ActionSheetItem(Icons.Filled.PowerSettingsNew, "Force Stop", onForceStop)
-                }
-                VmRunState.STOPPED -> {
-                    ActionSheetItem(Icons.Filled.PlayArrow, "Start", onStart)
-                }
+    ActionSheet(
+        onDismissRequest = onDismiss,
+        header = {
+            ResourceHeaderCard(
+                title = vm.name,
+                tone = vm.statusTone,
+                statusText = vm.statusLabel,
+                leading = { size -> VmIconBadge(state = vm.state, size = size) }
+            )
+        }
+    ) {
+        when (vm.state) {
+            VmRunState.RUNNING -> {
+                ActionSheetItem(Icons.Filled.RestartAlt, "Restart", onReboot)
+                ActionSheetItem(Icons.Filled.Pause, "Pause", onPause)
+                ActionSheetItem(Icons.Filled.Stop, "Stop", onStop, destructive = true)
+                ActionSheetItem(Icons.Filled.PowerSettingsNew, "Force Stop", onForceStop, destructive = true)
+            }
+            VmRunState.PAUSED -> {
+                ActionSheetItem(Icons.Filled.RestartAlt, "Restart", onReboot)
+                ActionSheetItem(Icons.Filled.PlayArrow, "Resume", onResume)
+                ActionSheetItem(Icons.Filled.Stop, "Stop", onStop, destructive = true)
+                ActionSheetItem(Icons.Filled.PowerSettingsNew, "Force Stop", onForceStop, destructive = true)
+            }
+            VmRunState.STOPPED -> {
+                ActionSheetItem(Icons.Filled.PlayArrow, "Start", onStart)
             }
         }
-    }
-}
-
-@Composable
-private fun VmInfoCard(vm: VmDomain, modifier: Modifier = Modifier) {
-    val spacing = MaterialTheme.spacing
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(spacing.mediumLarge),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
-    ) {
-        Row(
-            modifier = Modifier.padding(spacing.medium),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            VmIconBadge(state = vm.state, size = 56.dp)
-            Spacer(Modifier.width(spacing.mediumLarge))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    vm.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(Modifier.height(spacing.extraSmall))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .background(color = vm.state.dotColor(), shape = RoundedCornerShape(50))
-                    )
-                    Spacer(Modifier.width(spacing.extraSmall))
-                    Text(
-                        text = vm.statusLabel,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ActionSheetItem(icon: ImageVector, label: String, onClick: () -> Unit) {
-    val spacing = MaterialTheme.spacing
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = spacing.large, vertical = spacing.medium),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.width(spacing.medium))
-        Text(label, style = MaterialTheme.typography.bodyLarge)
     }
 }
 
 private val previewVms = listOf(
     VmDomain(id = "1", name = "Windows 11", state = VmRunState.RUNNING, statusLabel = "Running"),
     VmDomain(id = "2", name = "Ubuntu Server", state = VmRunState.STOPPED, statusLabel = "Shut Off"),
-    VmDomain(id = "3", name = "macOS Sonoma", state = VmRunState.PAUSED, statusLabel = "Paused")
+    VmDomain(id = "3", name = "macOS Sonoma", state = VmRunState.PAUSED, statusLabel = "Paused"),
+    VmDomain(id = "4", name = "Home Assistant OS", state = VmRunState.STOPPED, statusLabel = "Crashed", crashed = true)
 )
 
 @Preview(name = "Light Mode", showBackground = true)

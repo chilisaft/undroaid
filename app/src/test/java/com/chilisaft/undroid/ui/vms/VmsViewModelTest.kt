@@ -4,9 +4,11 @@ import com.chilisaft.undroid.data.models.VmDomain
 import com.chilisaft.undroid.data.models.VmRunState
 import com.chilisaft.undroid.data.models.WidgetResult
 import com.chilisaft.undroid.data.repository.VmRepository
+import com.chilisaft.undroid.ui.UserMessages
 import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.verify
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -21,6 +23,7 @@ import org.junit.Test
 class VmsViewModelTest {
 
     private lateinit var viewModel: VmsViewModel
+    private val userMessages: UserMessages = mockk(relaxed = true)
     private lateinit var repository: VmRepository
 
     private val testDispatcher = StandardTestDispatcher()
@@ -42,13 +45,13 @@ class VmsViewModelTest {
 
     @Test
     fun `initial state is loading`() {
-        viewModel = VmsViewModel(repository)
+        viewModel = VmsViewModel(repository, userMessages)
         assertThat(viewModel.uiState.value.vms).isEqualTo(WidgetResult.Loading)
     }
 
     @Test
     fun `loads the vm list`() {
-        viewModel = VmsViewModel(repository)
+        viewModel = VmsViewModel(repository, userMessages)
         testDispatcher.scheduler.advanceUntilIdle()
 
         assertThat(viewModel.uiState.value.vms).isEqualTo(WidgetResult.Success(listOf(testVm)))
@@ -57,7 +60,7 @@ class VmsViewModelTest {
     @Test
     fun `stop calls the repository, tracks it while in flight, and reloads on success`() {
         coEvery { repository.stopVm("v1") } returns WidgetResult.Success(Unit)
-        viewModel = VmsViewModel(repository)
+        viewModel = VmsViewModel(repository, userMessages)
         testDispatcher.scheduler.advanceUntilIdle()
 
         val stopped = testVm.copy(state = VmRunState.STOPPED, statusLabel = "Shut Off")
@@ -71,13 +74,15 @@ class VmsViewModelTest {
     }
 
     @Test
-    fun `start leaves the list untouched on failure`() {
+    fun `start leaves the list untouched on failure and tells the user why`() {
         coEvery { repository.startVm("v1") } returns WidgetResult.Failure(permissionDenied = true, message = null)
-        viewModel = VmsViewModel(repository)
+        viewModel = VmsViewModel(repository, userMessages)
         testDispatcher.scheduler.advanceUntilIdle()
 
         viewModel.start("v1")
         testDispatcher.scheduler.advanceUntilIdle()
+
+        verify { userMessages.showFailure("start Windows 11", any()) }
 
         coVerify(exactly = 1) { repository.getVms() }
         assertThat(viewModel.uiState.value.vms).isEqualTo(WidgetResult.Success(listOf(testVm)))
@@ -88,7 +93,7 @@ class VmsViewModelTest {
     fun `pause and resume call their respective repository methods and reload on success`() {
         coEvery { repository.pauseVm("v1") } returns WidgetResult.Success(Unit)
         coEvery { repository.resumeVm("v1") } returns WidgetResult.Success(Unit)
-        viewModel = VmsViewModel(repository)
+        viewModel = VmsViewModel(repository, userMessages)
         testDispatcher.scheduler.advanceUntilIdle()
 
         viewModel.pause("v1")
@@ -105,21 +110,43 @@ class VmsViewModelTest {
     @Test
     fun `forceStop calls the repository and reloads on success`() {
         coEvery { repository.forceStopVm("v1") } returns WidgetResult.Success(Unit)
-        viewModel = VmsViewModel(repository)
+        viewModel = VmsViewModel(repository, userMessages)
         testDispatcher.scheduler.advanceUntilIdle()
 
+        val stopped = testVm.copy(state = VmRunState.STOPPED, statusLabel = "Shut Off")
+        coEvery { repository.getVms() } returns WidgetResult.Success(listOf(stopped))
         viewModel.forceStop("v1")
         testDispatcher.scheduler.advanceUntilIdle()
 
         coVerify { repository.forceStopVm("v1") }
-        coVerify(exactly = 2) { repository.getVms() }
+        assertThat(viewModel.uiState.value.vms).isEqualTo(WidgetResult.Success(listOf(stopped)))
+        assertThat(viewModel.uiState.value.actioningIds).isEmpty()
+    }
+
+    @Test
+    fun `stop keeps polling until the vm actually reports stopped, then stops`() {
+        coEvery { repository.stopVm("v1") } returns WidgetResult.Success(Unit)
+        viewModel = VmsViewModel(repository, userMessages)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val stopped = testVm.copy(state = VmRunState.STOPPED, statusLabel = "Shut Off")
+        coEvery { repository.getVms() } returnsMany listOf(
+            WidgetResult.Success(listOf(testVm)),
+            WidgetResult.Success(listOf(testVm)),
+            WidgetResult.Success(listOf(stopped))
+        )
+        viewModel.stop("v1")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        coVerify(exactly = 4) { repository.getVms() }
+        assertThat(viewModel.uiState.value.vms).isEqualTo(WidgetResult.Success(listOf(stopped)))
         assertThat(viewModel.uiState.value.actioningIds).isEmpty()
     }
 
     @Test
     fun `reboot calls the repository and reloads on success`() {
         coEvery { repository.rebootVm("v1") } returns WidgetResult.Success(Unit)
-        viewModel = VmsViewModel(repository)
+        viewModel = VmsViewModel(repository, userMessages)
         testDispatcher.scheduler.advanceUntilIdle()
 
         viewModel.reboot("v1")
@@ -133,7 +160,7 @@ class VmsViewModelTest {
     @Test
     fun `reboot does not reload on failure`() {
         coEvery { repository.rebootVm("v1") } returns WidgetResult.Failure(permissionDenied = false, message = "boom")
-        viewModel = VmsViewModel(repository)
+        viewModel = VmsViewModel(repository, userMessages)
         testDispatcher.scheduler.advanceUntilIdle()
 
         viewModel.reboot("v1")

@@ -4,7 +4,8 @@ import android.content.res.Configuration
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -26,7 +27,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalUriHandler
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -34,6 +34,8 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import com.chilisaft.undroid.ui.components.BrandMark
+import com.chilisaft.undroid.ui.components.tryOpenUri
 import com.chilisaft.undroid.ui.theme.AppTheme
 import com.chilisaft.undroid.ui.theme.spacing
 
@@ -47,7 +49,6 @@ fun LoginScreen(onLoginSuccessful: () -> Unit) {
         onServerUrlChange = { viewModel.onServerUrlChange(it) },
         onApiTokenChange = { viewModel.onApiTokenChange(it) },
         onLoginClick = { viewModel.login() },
-        isLoginEnabled = viewModel.isLoginEnabled(),
         onLoginSuccessful = onLoginSuccessful
     )
 }
@@ -58,7 +59,6 @@ fun LoginContent(
     onServerUrlChange: (String) -> Unit,
     onApiTokenChange: (String) -> Unit,
     onLoginClick: () -> Unit,
-    isLoginEnabled: Boolean,
     onLoginSuccessful: () -> Unit
 ) {
     val spacing = MaterialTheme.spacing
@@ -67,80 +67,76 @@ fun LoginContent(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background
     ) {
-        Box(
-            contentAlignment = Alignment.Center
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier
+                .fillMaxSize()
+                .systemBarsPadding()
+                .imePadding()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = spacing.large, vertical = spacing.huge)
         ) {
-            Column(
-                verticalArrangement = Arrangement.Top,
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = spacing.large)
+            Spacer(Modifier.height(spacing.huge))
+            BrandMark()
+            Spacer(Modifier.height(spacing.large))
+            Text("Undroid", style = MaterialTheme.typography.displaySmall)
+            Text(
+                "Connect to your Unraid server",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(Modifier.height(spacing.extraLarge))
+
+            ServerUrlField(
+                value = uiState.serverUrl,
+                onChange = onServerUrlChange,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(Modifier.height(spacing.small))
+
+            ApiTokenField(
+                value = uiState.apiToken,
+                onChange = onApiTokenChange,
+                submit = onLoginClick,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(Modifier.height(spacing.small))
+
+            ApiKeyHelpSection()
+
+            Spacer(Modifier.height(spacing.medium))
+
+            Button(
+                onClick = onLoginClick,
+                enabled = uiState.isLoginEnabled,
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Spacer(modifier = Modifier.height(150.dp))
-
-                // Using displayMedium for Chakra Petch font branding
-                Text(
-                    text = "Unraid Login",
-                    style = MaterialTheme.typography.displayMedium,
-                    fontWeight = FontWeight.Bold
-                )
-
-                Spacer(modifier = Modifier.height(spacing.large))
-
-                ServerUrlField(
-                    value = uiState.serverUrl,
-                    onChange = onServerUrlChange,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Spacer(modifier = Modifier.height(spacing.small))
-
-                ApiTokenField(
-                    value = uiState.apiToken,
-                    onChange = onApiTokenChange,
-                    submit = onLoginClick,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Spacer(modifier = Modifier.height(spacing.small))
-
-                ApiKeyHelpSection()
-
-                Spacer(modifier = Modifier.height(spacing.medium))
-
-                // Switched to Button for Primary color usage
-                Button(
-                    onClick = onLoginClick,
-                    enabled = isLoginEnabled,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(spacing.medium)
-                ) {
-                    if (uiState.isLoading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.onPrimary // Contrast against primary button
-                        )
-                    } else {
-                        Text("Login")
-                    }
-                }
-
-                uiState.error?.let { error ->
-                    Spacer(modifier = Modifier.height(spacing.small))
-                    Text(
-                        text = error,
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall
+                if (uiState.isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary
                     )
+                } else {
+                    Text("Log In")
                 }
+            }
 
-                // Proper side-effect handling for navigation
-                if (uiState.isLoggedIn) {
-                    LaunchedEffect(Unit) {
-                        onLoginSuccessful()
-                    }
+            uiState.error?.let { error ->
+                Spacer(Modifier.height(spacing.small))
+                Text(
+                    text = error,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+
+            if (uiState.isLoggedIn) {
+                LaunchedEffect(Unit) {
+                    onLoginSuccessful()
                 }
             }
         }
@@ -178,7 +174,7 @@ fun ServerUrlField(
         ),
         placeholder = { Text(placeholder) },
         label = { Text(label) },
-        shape = RoundedCornerShape(30),
+        shape = MaterialTheme.shapes.medium,
         singleLine = true
     )
 }
@@ -189,8 +185,8 @@ fun ApiTokenField(
     onChange: (String) -> Unit,
     submit: () -> Unit,
     modifier: Modifier = Modifier,
-    label: String = "API Token",
-    placeholder: String = "Enter your API Token"
+    label: String = "API Key",
+    placeholder: String = "Enter your API key"
 ) {
     var isTokenVisible by remember { mutableStateOf(false) }
 
@@ -205,7 +201,7 @@ fun ApiTokenField(
         IconButton(onClick = { isTokenVisible = !isTokenVisible }) {
             Icon(
                 if (isTokenVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                contentDescription = if (isTokenVisible) "Hide token" else "Show token",
+                contentDescription = if (isTokenVisible) "Hide key" else "Show key",
                 tint = MaterialTheme.colorScheme.primary
             )
         }
@@ -227,7 +223,7 @@ fun ApiTokenField(
         placeholder = { Text(placeholder) },
         label = { Text(label) },
         singleLine = true,
-        shape = RoundedCornerShape(30),
+        shape = MaterialTheme.shapes.medium,
         visualTransformation = if (isTokenVisible) VisualTransformation.None else PasswordVisualTransformation()
     )
 }
@@ -249,7 +245,7 @@ private fun ApiKeyHelpSection() {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(spacing.small))
+                .clip(MaterialTheme.shapes.small)
                 .clickable { expanded = !expanded }
                 .padding(vertical = spacing.small),
             verticalAlignment = Alignment.CenterVertically
@@ -289,7 +285,7 @@ private fun ApiKeyHelpSection() {
                     )
                 }
                 TextButton(
-                    onClick = { uriHandler.openUri(UNRAID_API_DOCS_URL) },
+                    onClick = { uriHandler.tryOpenUri(UNRAID_API_DOCS_URL) },
                     contentPadding = PaddingValues(vertical = spacing.extraSmall, horizontal = spacing.small)
                 ) {
                     Text("Official Unraid API docs")
@@ -314,7 +310,6 @@ fun LoginScreenPreview() {
             onServerUrlChange = {},
             onApiTokenChange = {},
             onLoginClick = {},
-            isLoginEnabled = true,
             onLoginSuccessful = {}
         )
     }
@@ -329,7 +324,6 @@ fun LoginScreenLoadingPreview() {
             onServerUrlChange = {},
             onApiTokenChange = {},
             onLoginClick = {},
-            isLoginEnabled = false,
             onLoginSuccessful = {}
         )
     }
@@ -344,7 +338,6 @@ fun LoginScreenErrorPreview() {
             onServerUrlChange = {},
             onApiTokenChange = {},
             onLoginClick = {},
-            isLoginEnabled = true,
             onLoginSuccessful = {}
         )
     }

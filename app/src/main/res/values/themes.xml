@@ -1,6 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!--
+        The window theme behind the Compose UI. Compose draws everything (AppTheme in
+        ui/theme/Theme.kt), so this only matters for what shows *before* the first frame and around
+        window transitions/the keyboard: a forest-paper background (forest ink in dark mode, see
+        values-night) instead of the stock white window. Platform Material parent, so the app doesn't
+        depend on AppCompat (previously `Theme.AppCompat`, which only resolved because another
+        library happened to pull AppCompat in transitively).
+    -->
+    <style name="Theme.Undroid" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/window_background</item>
+    </style>
+
+    <!--
         Shown between process start and the first Compose frame. `postSplashScreenTheme` swaps
         the activity back to the app's real theme automatically once the splash screen library
         hands off - see UndroidActivity's splashScreen.setKeepOnScreenCondition.
@@ -8,6 +20,6 @@
     <style name="Theme.Undroid.Starting" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">@color/ic_launcher_background</item>
         <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>
-        <item name="postSplashScreenTheme">@style/Theme.AppCompat</item>
+        <item name="postSplashScreenTheme">@style/Theme.Undroid</item>
     </style>
 </resources>

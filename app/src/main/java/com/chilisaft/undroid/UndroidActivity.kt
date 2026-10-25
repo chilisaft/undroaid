@@ -1,13 +1,16 @@
 package com.chilisaft.undroid
 
+import android.graphics.Color
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
@@ -18,6 +21,7 @@ import com.chilisaft.undroid.graphs.AppStartupState
 import com.chilisaft.undroid.graphs.AppStartupViewModel
 import com.chilisaft.undroid.graphs.RootNavGraph
 import com.chilisaft.undroid.graphs.UndroidGraph
+import com.chilisaft.undroid.ui.UserMessages
 import com.chilisaft.undroid.ui.theme.AppTheme
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
@@ -27,6 +31,9 @@ class UndroidActivity : ComponentActivity() {
 
     @Inject
     lateinit var settingsRepository: SettingsRepository
+
+    @Inject
+    lateinit var userMessages: UserMessages
 
     private val appStartupViewModel: AppStartupViewModel by viewModels()
 
@@ -48,6 +55,15 @@ class UndroidActivity : ComponentActivity() {
                 ThemeMode.LIGHT -> false
                 ThemeMode.DARK -> true
             }
+            // The plain enableEdgeToEdge() call above picks status/nav bar icon colors from the
+            // *system* dark mode - with the app forced to Light on a dark-mode phone (or vice
+            // versa) that left white clock/battery icons on a light background. Re-apply it
+            // whenever the app's own resolved theme changes.
+            DisposableEffect(darkTheme) {
+                val barStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT) { darkTheme }
+                enableEdgeToEdge(statusBarStyle = barStyle, navigationBarStyle = barStyle)
+                onDispose {}
+            }
             AppTheme(darkTheme = darkTheme, dynamicColor = useDynamicColor) {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     val startupState by appStartupViewModel.state.collectAsState()
@@ -55,6 +71,7 @@ class UndroidActivity : ComponentActivity() {
                     // window at that point, so there's no frame for a placeholder to matter.
                     if (startupState != AppStartupState.Loading) {
                         RootNavGraph(
+                            userMessages = userMessages.messages,
                             startDestination = if (startupState == AppStartupState.LoggedIn) {
                                 UndroidGraph.UNDROID_ROUTE
                             } else {

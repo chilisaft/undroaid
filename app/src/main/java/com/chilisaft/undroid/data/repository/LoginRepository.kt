@@ -2,6 +2,7 @@ package com.chilisaft.undroid.data.repository
 
 import com.apollographql.apollo.ApolloClient
 import com.apollographql.apollo.exception.ApolloException
+import com.chilisaft.undroid.data.api.toUserMessage
 import com.chilisaft.undroid.data.models.Login
 import com.chilisaft.undroid.graphql.TestLoginQuery
 import com.chilisaft.undroid.utils.Storage
@@ -31,7 +32,9 @@ class LoginRepository @Inject constructor(
                 Result.failure(Exception(errorMessage))
             }
         } catch (e: ApolloException) {
-            Result.failure(e)
+            // Keep the Apollo exception as the cause - AppStartupViewModel inspects it to tell
+            // "server unreachable" apart from "key rejected".
+            Result.failure(LoginException(e.toUserMessage(), e))
         }
     }
 
@@ -44,3 +47,6 @@ class LoginRepository @Inject constructor(
         storage.apiToken = null
     }
 }
+
+/** A failed login whose [message] is ready to show on the login form; [cause] is the underlying Apollo error. */
+class LoginException(message: String, cause: Throwable) : Exception(message, cause)

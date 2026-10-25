@@ -1,13 +1,11 @@
 package com.chilisaft.undroid.ui.main
 
 import android.content.res.Configuration
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -19,38 +17,47 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleStartEffect
 import com.chilisaft.undroid.data.models.ArrayDeviceInfo
 import com.chilisaft.undroid.data.models.ArrayDeviceRole
 import com.chilisaft.undroid.data.models.ArrayOverview
 import com.chilisaft.undroid.data.models.ArrayRunState
+import com.chilisaft.undroid.data.models.DeviceHealth
 import com.chilisaft.undroid.data.models.DiskIdentification
 import com.chilisaft.undroid.data.models.FlashInfo
 import com.chilisaft.undroid.data.models.ParityCheckInfo
 import com.chilisaft.undroid.data.models.WidgetResult
-import com.chilisaft.undroid.ui.components.ScreenTitle
+import com.chilisaft.undroid.ui.components.AppCard
+import com.chilisaft.undroid.ui.components.ConfirmActionDialog
+import com.chilisaft.undroid.ui.components.ParityCheckProgress
+import com.chilisaft.undroid.ui.components.ScreenList
+import com.chilisaft.undroid.ui.components.SectionHeader
+import com.chilisaft.undroid.ui.components.StatusDot
+import com.chilisaft.undroid.ui.components.TabTopBar
 import com.chilisaft.undroid.ui.components.WidgetSection
+import com.chilisaft.undroid.ui.theme.StatusTone
 import com.chilisaft.undroid.ui.theme.AppTheme
 import com.chilisaft.undroid.ui.theme.spacing
-import com.chilisaft.undroid.utils.estimatedSecondsRemaining
 import com.chilisaft.undroid.utils.kilobytesToHumanReadable
-import com.chilisaft.undroid.utils.toRemainingTimeLabel
 
 @Composable
-fun MainScreen(viewModel: MainViewModel = hiltViewModel(), onUserClick: () -> Unit = {}) {
+fun MainScreen(viewModel: MainViewModel = hiltViewModel(), topBarActions: @Composable RowScope.() -> Unit = {}) {
     val uiState by viewModel.uiState.collectAsState()
+    LifecycleStartEffect(viewModel) {
+        viewModel.onScreenVisible()
+        onStopOrDispose { viewModel.onScreenHidden() }
+    }
     MainScreenContent(
         uiState = uiState,
         onRetry = viewModel::refresh,
-        onUserClick = onUserClick,
+        topBarActions = topBarActions,
         onStartArray = viewModel::startArray,
         onStopArray = viewModel::stopArray,
         onRetryParityCheck = viewModel::refreshParityCheck,
@@ -66,7 +73,7 @@ fun MainScreen(viewModel: MainViewModel = hiltViewModel(), onUserClick: () -> Un
 fun MainScreenContent(
     uiState: MainScreenState,
     onRetry: () -> Unit = {},
-    onUserClick: () -> Unit = {},
+    topBarActions: @Composable RowScope.() -> Unit = {},
     onStartArray: (String?) -> Unit = {},
     onStopArray: () -> Unit = {},
     onRetryParityCheck: () -> Unit = {},
@@ -77,19 +84,10 @@ fun MainScreenContent(
 ) {
     val spacing = MaterialTheme.spacing
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { ScreenTitle(Icons.Filled.Storage, "Main") },
-                actions = {
-                    IconButton(onClick = onUserClick) {
-                        Icon(Icons.Filled.AccountCircle, contentDescription = "Account")
-                    }
-                }
-            )
-        }
+        topBar = { TabTopBar(title = "Main", icon = Icons.Filled.Storage, actions = topBarActions) }
     ) { padding ->
         PullToRefreshBox(
-            isRefreshing = uiState.overview is WidgetResult.Loading,
+            isRefreshing = uiState.isRefreshing,
             onRefresh = onRetry,
             modifier = Modifier
                 .fillMaxSize()
@@ -97,10 +95,7 @@ fun MainScreenContent(
                 .padding(horizontal = spacing.medium)
         ) {
             WidgetSection(result = uiState.overview, onRetry = onRetry, minHeight = 200.dp) { overview ->
-                LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(spacing.itemSpacing),
-                    contentPadding = PaddingValues(vertical = spacing.medium)
-                ) {
+                ScreenList {
                     item { ArrayStatusLine(overview) }
 
                     if (overview.parities.isNotEmpty() || overview.disks.isNotEmpty()) {
@@ -142,7 +137,6 @@ fun MainScreenContent(
                         )
                     }
 
-                    item { Spacer(Modifier.height(spacing.extraLarge)) }
                 }
             }
         }
@@ -161,33 +155,37 @@ private fun flashIdentificationLine(result: WidgetResult<FlashInfo>): String? {
     return "${flash.vendor} ${flash.product}"
 }
 
-@Composable
-private fun SectionHeader(title: String) {
-    Text(
-        text = title.uppercase(),
-        style = MaterialTheme.typography.labelMedium,
-        fontWeight = FontWeight.Bold,
-        color = MaterialTheme.colorScheme.primary
-    )
-}
+private val ArrayDeviceInfo.statusTone: StatusTone
+    get() = when (health) {
+        DeviceHealth.OK -> StatusTone.Ok
+        DeviceHealth.NOT_PRESENT -> StatusTone.Neutral
+        DeviceHealth.PROBLEM -> StatusTone.Error
+    }
+
+/**
+ * Same rule as the Dashboard's "HEALTH" pill (any device not OK is a problem), plus the array's
+ * run state: a stopped array is a normal, neutral state, not an error.
+ */
+private val ArrayOverview.statusTone: StatusTone
+    get() = when {
+        (parities + disks + caches).any { it.health == DeviceHealth.PROBLEM } -> StatusTone.Error
+        state == ArrayRunState.STARTED -> StatusTone.Ok
+        state == ArrayRunState.STOPPED -> StatusTone.Neutral
+        else -> StatusTone.Warning
+    }
 
 @Composable
 private fun ArrayStatusLine(overview: ArrayOverview) {
     val spacing = MaterialTheme.spacing
-    val healthy = overview.state == ArrayRunState.STARTED
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .size(8.dp)
-                    .background(if (healthy) Color(0xFF4CAF50) else MaterialTheme.colorScheme.error, RoundedCornerShape(50))
-            )
+            StatusDot(overview.statusTone)
             Spacer(Modifier.width(spacing.small))
-            Text(overview.statusLabel, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(overview.statusLabel, style = MaterialTheme.typography.titleMedium)
         }
         if (overview.usedKb != null && overview.totalKb != null) {
             Text(
@@ -201,11 +199,7 @@ private fun ArrayStatusLine(overview: ArrayOverview) {
 
 @Composable
 private fun ArrayDeviceRow(device: ArrayDeviceInfo, identificationLine: String?) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(MaterialTheme.spacing.mediumLarge),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
-    ) {
+    AppCard {
         ArrayDeviceRowContent(device, identificationLine, modifier = Modifier.padding(MaterialTheme.spacing.medium))
     }
 }
@@ -213,14 +207,12 @@ private fun ArrayDeviceRow(device: ArrayDeviceInfo, identificationLine: String?)
 @Composable
 private fun ArrayDeviceRowContent(device: ArrayDeviceInfo, identificationLine: String?, modifier: Modifier = Modifier) {
     val spacing = MaterialTheme.spacing
-    val isOk = device.statusLabel == null || device.statusLabel == "OK"
     Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = device.name ?: device.device ?: "Unknown",
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false)
@@ -247,37 +239,33 @@ private fun ArrayDeviceRowContent(device: ArrayDeviceInfo, identificationLine: S
             }
         }
         Spacer(Modifier.width(spacing.small))
-        Box(
-            modifier = Modifier
-                .size(8.dp)
-                .background(if (isOk) Color(0xFF4CAF50) else MaterialTheme.colorScheme.error, RoundedCornerShape(50))
-        )
+        StatusDot(device.statusTone)
     }
 }
-
-/** Inner radius where two grouped items touch; matches Android's own Settings grouped-list style. */
-private val GROUP_INNER_RADIUS = 4.dp
 
 /** Gap between grouped items - small enough that they still read as one cluster, not separate cards. */
 private val GROUP_ITEM_GAP = 2.dp
 
 /**
  * The corner shape for item [index] of [count] in a grouped cluster: outer corners (top of the
- * first item, bottom of the last) get [outerRadius] - the rest of that item's corners, including
- * every corner that touches a neighboring item, get [GROUP_INNER_RADIUS]. A single-item group
- * (`count == 1`) gets [outerRadius] on all four corners.
+ * first item, bottom of the last) keep the card shape (`shapes.large`) - every corner that
+ * touches a neighboring item flattens to `shapes.extraSmall`, matching Android's own Settings
+ * grouped-list style. A single-item group (`count == 1`) is just a normal card shape.
  */
-private fun groupItemShape(index: Int, count: Int, outerRadius: Dp): RoundedCornerShape {
-    val top = if (index == 0) outerRadius else GROUP_INNER_RADIUS
-    val bottom = if (index == count - 1) outerRadius else GROUP_INNER_RADIUS
-    return RoundedCornerShape(topStart = top, topEnd = top, bottomStart = bottom, bottomEnd = bottom)
+@Composable
+private fun groupItemShape(index: Int, count: Int): CornerBasedShape {
+    val outer = MaterialTheme.shapes.large
+    val inner = MaterialTheme.shapes.extraSmall.topStart
+    val top = if (index == 0) outer.topStart else inner
+    val bottom = if (index == count - 1) outer.bottomStart else inner
+    return outer.copy(topStart = top, topEnd = top, bottomStart = bottom, bottomEnd = bottom)
 }
 
 /**
  * Renders every device in [devices] as its own small-gap, stepped-corner surface - the "grouped
  * list" look Android's own Settings app uses for related items (as opposed to one bounded `Card`
  * with hairline dividers): each row keeps its own background, but adjacent corners flatten to
- * [GROUP_INNER_RADIUS] and the gap between rows shrinks to [GROUP_ITEM_GAP], so the cluster still
+ * `shapes.extraSmall` and the gap between rows shrinks to [GROUP_ITEM_GAP], so the cluster still
  * reads as one logical group rather than separate floating cards.
  */
 @Composable
@@ -296,7 +284,7 @@ private fun DeviceGroupCard(devices: List<ArrayDeviceInfo>, identifications: Wid
 private fun GroupedItemSurface(index: Int, count: Int, content: @Composable () -> Unit) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = groupItemShape(index, count, outerRadius = MaterialTheme.spacing.mediumLarge),
+        shape = groupItemShape(index, count),
         color = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
         content()
@@ -338,8 +326,7 @@ private fun PoolCard(poolName: String, devices: List<ArrayDeviceInfo>, identific
     Column(verticalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.extraSmall)) {
         Text(
             text = poolName,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(start = MaterialTheme.spacing.small)
         )
@@ -355,7 +342,7 @@ private fun deviceSummaryLine(device: ArrayDeviceInfo): String {
     }
     device.tempC?.let { parts += "${it}°C" }
     device.isSpinning?.let { parts += if (it) "Spinning" else "Standby" }
-    device.statusLabel?.let { if (it != "OK") parts += it }
+    if (device.health != DeviceHealth.OK) device.statusLabel?.let { parts += it }
     return if (parts.isEmpty()) "No data" else parts.joinToString(" · ")
 }
 
@@ -368,7 +355,7 @@ private fun RoleBadge(role: ArrayDeviceRole) {
         ArrayDeviceRole.FLASH -> "FLASH"
         ArrayDeviceRole.CACHE -> "CACHE"
     }
-    Surface(color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f), shape = RoundedCornerShape(50)) {
+    Surface(color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f), shape = CircleShape) {
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall,
@@ -395,12 +382,10 @@ private fun ArrayOperationSection(
 ) {
     val spacing = MaterialTheme.spacing
     var showStartDialog by remember { mutableStateOf(false) }
+    var showStopDialog by remember { mutableStateOf(false) }
+    var showCancelParityDialog by remember { mutableStateOf(false) }
 
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(spacing.mediumLarge),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
-    ) {
+    AppCard {
         Column(modifier = Modifier.padding(spacing.medium), verticalArrangement = Arrangement.spacedBy(spacing.medium)) {
             // Array start/stop
             when (overview.state) {
@@ -413,9 +398,12 @@ private fun ArrayOperationSection(
                     else Text("Start Array")
                 }
                 ArrayRunState.STARTED -> Button(
-                    onClick = onStopArray,
+                    onClick = { showStopDialog = true },
                     enabled = !actioningArray,
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError
+                    ),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     if (actioningArray) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
@@ -441,10 +429,32 @@ private fun ArrayOperationSection(
                     onStart = onStartParityCheck,
                     onPause = onPauseParityCheck,
                     onResume = onResumeParityCheck,
-                    onCancel = onCancelParityCheck
+                    onCancel = { showCancelParityDialog = true }
                 )
             }
         }
+    }
+
+    if (showStopDialog) {
+        ConfirmActionDialog(
+            title = "Stop the array?",
+            text = "Shares go offline and every Docker container and VM stops until the array is started again.",
+            confirmLabel = "Stop Array",
+            onConfirm = onStopArray,
+            onDismiss = { showStopDialog = false },
+            destructive = true
+        )
+    }
+
+    if (showCancelParityDialog) {
+        ConfirmActionDialog(
+            title = "Stop the parity check?",
+            text = "Progress so far is discarded - the next check starts again from the beginning.",
+            confirmLabel = "Stop Check",
+            onConfirm = onCancelParityCheck,
+            onDismiss = { showCancelParityDialog = false },
+            destructive = true
+        )
     }
 
     if (showStartDialog) {
@@ -471,32 +481,7 @@ private fun ParityCheckControls(
     val spacing = MaterialTheme.spacing
     val isActive = parityCheck.running || parityCheck.paused
     Column(verticalArrangement = Arrangement.spacedBy(spacing.small)) {
-        Text("Parity Check", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-        if (isActive) {
-            LinearProgressIndicator(
-                progress = { (parityCheck.progressPercent ?: 0) / 100f },
-                modifier = Modifier.fillMaxWidth(),
-                color = if (parityCheck.paused) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary
-            )
-            Text(
-                buildString {
-                    append("${parityCheck.progressPercent ?: 0}%")
-                    parityCheck.speed?.let { append(" · $it MB/s") }
-                    append(" · ${parityCheck.errors ?: 0} errors")
-                    estimatedSecondsRemaining(parityCheck.progressPercent, parityCheck.speed, paritySizeKb)?.let {
-                        append(" · ~${it.toRemainingTimeLabel()} remaining")
-                    }
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        } else {
-            Text(
-                parityCheck.statusLabel,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
+        ParityCheckProgress(parityCheck, paritySizeKb)
         // Always shown, individually enabled/disabled by state, rather than swapping between
         // different button sets - Start doubles as Resume while paused (one action either way).
         Row(horizontalArrangement = Arrangement.spacedBy(spacing.small)) {
@@ -564,32 +549,32 @@ private val previewOverview = ArrayOverview(
     totalKb = 7_814_058_336L,
     boot = ArrayDeviceInfo(
         id = "54", name = "flash", device = "/dev/sda", role = ArrayDeviceRole.FLASH,
-        sizeKb = 30_500_000L, usedKb = null, freeKb = null, statusLabel = "OK",
+        sizeKb = 30_500_000L, usedKb = null, freeKb = null, statusLabel = "OK", health = DeviceHealth.OK,
         tempC = null, isSpinning = null, fsType = "vfat", transport = "usb"
     ),
     caches = listOf(
         ArrayDeviceInfo(
             id = "30", name = "cache", device = "/dev/sdd", role = ArrayDeviceRole.CACHE,
-            sizeKb = 1_953_514_584L, usedKb = 500_000_000L, freeKb = 1_453_514_584L, statusLabel = "OK",
+            sizeKb = 1_953_514_584L, usedKb = 500_000_000L, freeKb = 1_453_514_584L, statusLabel = "OK", health = DeviceHealth.OK,
             tempC = 38, isSpinning = true, fsType = "btrfs", transport = "nvme"
         ),
         ArrayDeviceInfo(
             id = "31", name = "cache", device = "/dev/sde", role = ArrayDeviceRole.CACHE,
-            sizeKb = 1_953_514_584L, usedKb = 500_000_000L, freeKb = 1_453_514_584L, statusLabel = "OK",
+            sizeKb = 1_953_514_584L, usedKb = 500_000_000L, freeKb = 1_453_514_584L, statusLabel = "OK", health = DeviceHealth.OK,
             tempC = 37, isSpinning = true, fsType = "btrfs", transport = "nvme"
         )
     ),
     parities = listOf(
         ArrayDeviceInfo(
             id = "0", name = "parity", device = "/dev/sdb", role = ArrayDeviceRole.PARITY,
-            sizeKb = 7_814_058_336L, usedKb = null, freeKb = null, statusLabel = "OK",
+            sizeKb = 7_814_058_336L, usedKb = null, freeKb = null, statusLabel = "OK", health = DeviceHealth.OK,
             tempC = 32, isSpinning = true, fsType = null, transport = "sata"
         )
     ),
     disks = listOf(
         ArrayDeviceInfo(
             id = "1", name = "disk1", device = "/dev/sdc", role = ArrayDeviceRole.DATA,
-            sizeKb = 7_814_058_336L, usedKb = 3_500_000_000L, freeKb = 4_314_058_336L, statusLabel = "OK",
+            sizeKb = 7_814_058_336L, usedKb = 3_500_000_000L, freeKb = 4_314_058_336L, statusLabel = "OK", health = DeviceHealth.OK,
             tempC = 34, isSpinning = true, fsType = "xfs", transport = "sata"
         )
     )

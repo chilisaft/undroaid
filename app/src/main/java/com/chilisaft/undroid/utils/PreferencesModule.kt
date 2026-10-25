@@ -14,18 +14,19 @@ import javax.inject.Qualifier
 import javax.inject.Singleton
 
 @Qualifier
-@Singleton
 @Retention(AnnotationRetention.BINARY)
 annotation class DefaultPreferences
 
 @Qualifier
-@Singleton
 @Retention(AnnotationRetention.BINARY)
 annotation class EncryptedPreferences
 
+/** Must match the `path` excluded from backups in res/xml/backup_rules.xml and data_extraction_rules.xml. */
+private const val ENCRYPTED_PREFS_FILE = "encrypted_prefs"
+
 @Module
 @InstallIn(SingletonComponent::class)
-object SharedPreferences {
+object PreferencesModule {
 
     @Provides
     @Singleton
@@ -38,14 +39,25 @@ object SharedPreferences {
     @Singleton
     @EncryptedPreferences
     fun provideEncryptedSharedPreferences(@ApplicationContext context: Context): SharedPreferences {
-        // This is the correct, non-deprecated method for creating EncryptedSharedPreferences.
-        // It takes the master key alias as a String and manages the key lifecycle internally.
-        return EncryptedSharedPreferences.create(
-            "encrypted_prefs", // 1. The file name
-            MasterKey.DEFAULT_MASTER_KEY_ALIAS, // 2. The master key alias
-            context, // 3. The context
+        // If the file can't be decrypted - its Keystore key is gone, e.g. it came from a backup of
+        // another device made before backup_rules.xml excluded it - creating it throws on every
+        // launch. Start over with an empty file instead: the user only has to log in again.
+        return try {
+            createEncryptedSharedPreferences(context)
+        } catch (e: Exception) {
+            context.deleteSharedPreferences(ENCRYPTED_PREFS_FILE)
+            createEncryptedSharedPreferences(context)
+        }
+    }
+
+    // Note: this String-alias overload of create() is deprecated, as is security-crypto as a whole
+    // - migrating off it is tracked separately.
+    private fun createEncryptedSharedPreferences(context: Context): SharedPreferences =
+        EncryptedSharedPreferences.create(
+            ENCRYPTED_PREFS_FILE,
+            MasterKey.DEFAULT_MASTER_KEY_ALIAS,
+            context,
             EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
         )
-    }
 }

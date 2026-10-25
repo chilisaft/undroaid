@@ -3,16 +3,28 @@
   <title>Undroid mark — Home Server</title>
   <!--
     Approved direction as of this exploration round - forest palette:
-      ink  #16321F  (roof, vents)
-      pine #2F6B48  (walls)
+      ink  #16321F  (roofline, walls, array lines)
       pop  #E3A94A  (the wink)
     Not yet wired up as the live app icon/adaptive-icon resources - see NOTES.md.
+
+    Abstract line-work take, the surviving direction after a filled/two-tone
+    version (rounded shapes, roof overhang, ink+pine) didn't land - it kept
+    reading as either a hat (one merged silhouette) or two shapes with a visible
+    seam (wall rect + separate roof piece), and wasn't worth carrying forward.
+
+    Traced as a single open stroke instead of filled shapes - deliberately
+    unclosed at the bottom (no floor line) so it reads as a roofline gesture
+    rather than a boxed icon. The wall lines stop short of the eave height and
+    kick out to a wider point before the roof's diagonal starts, giving a small
+    overhang. Two short array lines (the drive-bay motif shared with the other
+    marks) sit inside the frame. The wink matches the Platter mark's treatment
+    exactly - a solid dot and a solid tilted capsule, not an outlined ring.
   -->
-  <rect x="24" y="42" width="48" height="40" rx="10" fill="#2F6B48" />
-  <path d="M26,44 L70,44 Q76,44 71.91,39.61 L53.46,19.85 Q48,14 42.54,19.85 L24.09,39.61 Q20,44 26,44 Z" fill="#16321F" />
-  <rect x="33" y="58" width="30" height="4" rx="2" fill="#16321F" opacity="0.85" />
-  <rect x="33" y="66" width="30" height="4" rx="2" fill="#16321F" opacity="0.85" />
-  <rect x="33" y="74" width="30" height="4" rx="2" fill="#16321F" opacity="0.85" />
+  <path d="M20,82 L20,48 L14,44 L48,14 L82,44 L76,48 L76,82"
+        fill="none" stroke="#16321F" stroke-width="6"
+        stroke-linecap="round" stroke-linejoin="round" />
+  <line x1="32" y1="62" x2="64" y2="62" stroke="#16321F" stroke-width="4" stroke-linecap="round" />
+  <line x1="32" y1="70" x2="64" y2="70" stroke="#16321F" stroke-width="4" stroke-linecap="round" />
   <circle cx="39" cy="52" r="3.4" fill="#E3A94A" />
-  <rect x="51.2" y="50.4" width="7.6" height="3.2" rx="1.6" fill="#E3A94A" transform="rotate(-14 55 52)" />
+  <rect x="53.2" y="50.4" width="7.6" height="3.2" rx="1.6" fill="#E3A94A" transform="rotate(-14 57 52)" />
 </svg>

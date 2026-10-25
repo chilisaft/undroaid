@@ -92,10 +92,9 @@ Card containers were barely visible against their screen background - see below.
     permission, no new query needed. Polls every 5s while running (mirrors
     `MainViewModel`'s parity-check poll, same "only while running, not merely paused" condition,
     same reasoning: progress needs to move without a manual refresh). Also refreshes on every
-    entry into this tab (`LaunchedEffect(Unit)` in `DashboardScreen`, not just app launch) - fixes
-    a real bug where a parity check starting while the user was on another tab never showed up
-    here, since `DashboardViewModel` is a persistent singleton that doesn't auto-refetch on tab
-    switches (see "Known limitations" below for the full parity-check bug writeup)
+    return to this tab - see "Screen visibility & polling" below (an earlier note here described a
+    `LaunchedEffect(Unit)` doing this, but that code never existed; it was added for real on
+    2026-10-25)
   - CPU + memory load, polled every 1s (`ServerRepository.observeSystemMetricsPoll`) —
     deliberately polling, not a GraphQL subscription; see "Known limitations" below
   - Uptime, ticking client-side every 30s from `info.os.uptime` (boot time)
@@ -290,13 +289,93 @@ Card containers were barely visible against their screen background - see below.
      `DeviceGroupCard` lost its `header` slot as a result (was only ever used for this one case, so
      kept as dead flexibility would have been premature).
 - **Navigation** (`graphs/UndroidNavGraph.kt`) — bottom nav: Dashboard, Main, Docker, VMs.
-  A 5th "More" item opens a `ModalBottomSheet` with just Shares and Server now (Settings moved
-  to the account menu above). Bottom bar hides itself on drill-in screens
+  A 5th "More" item opens an `ActionSheet` with Shares and Server (both pending - see
+  [TODO.md](TODO.md)). Settings is in the account menu. Bottom bar hides itself on drill-in screens
   (Settings/Notifications/Shares/Server), which have their own back button instead.
+
+## Screen visibility & polling (2026-10-25)
+
+- Every tab's screen tells its ViewModel when it's actually on screen, via
+  `LifecycleStartEffect` -> `onScreenVisible()` / `onScreenHidden()` (the nav back-stack entry
+  stops when another tab/drill-in screen is shown, and when the app goes to the background).
+  **All polling only runs while visible**: Dashboard's 1s CPU/memory poll and 5s parity poll,
+  Main's parity poll, Docker's 3s log tail (which pauses and resumes from its cursor). Previously
+  they ran for the ViewModel's whole lifetime - i.e. the whole session, background included.
+- Tab ViewModels survive tab switches, so every visit after the first calls `refresh()`.
+- Refreshes keep current data on screen (`WidgetResult.reloading()`) and drive the pull-to-refresh
+  indicator from a separate `isRefreshing` flag, instead of swapping lists for a loading card.
+- Login/logout navigation lives in `navigateToMainAfterLogin()` / `navigateToLoginAfterLogout()`
+  (`RootNavGraph.kt`), covered by the instrumented `RootNavigationTest`. Run instrumented tests
+  with `installDebugAndroidTest` + `adb shell am instrument -w -e class <Test>
+  com.chilisaft.undroid.test/com.chilisaft.undroid.HiltTestRunner` - **not** `connectedAndroidTest`,
+  which uninstalls the app afterwards and wipes the saved login.
+- Startup (`AppStartupViewModel`) only treats a *rejected* key as logged out; unreachable/slow/5xx
+  keeps the session (checked with a 4s cap so the splash can't hang).
+- The encrypted credentials file is excluded from backup/device transfer (its Keystore key can't
+  move devices), and an undecryptable file is reset instead of crashing on launch.
+
+## Data-layer conventions (2026-10-25)
+
+- Mappings shared between repositories live once in `data/repository/GraphQlMappers.kt` (array
+  state / parity / disk-status labels, `toParityCheckInfo`, container state, device health).
+- Device health is `ArrayDeviceInfo.health: DeviceHealth` (OK / NOT_PRESENT / PROBLEM), derived from
+  the `ArrayDiskStatus` enum - never compare display labels. `DISK_NP` (an unassigned slot, e.g. no
+  2nd parity) is NOT_PRESENT: neutral dot, doesn't make the array unhealthy (Dashboard badge and
+  Main status line both use `allHealthy()`).
+- User-facing error text comes from `ApolloException.toUserMessage()` (`data/api/ApiErrorMessages.kt`)
+  - "Can't reach the server…", "The server rejected the API key", etc. - for widget errors, the
+  failure Snackbar and the login form. Server-written GraphQL error messages pass through as-is.
+- `PreferencesModule` (formerly an `object SharedPreferences` that shadowed Android's type) provides
+  both preference files. Its instrumented test **clears the encrypted prefs, i.e. logs the app out**
+  - don't run it on a device whose login you want to keep.
+- The window theme is `Theme.Undroid` (platform Material, light + `values-night`), no AppCompat.
+
+## UI design system (2026-10-25)
+
+After a consistency review, screens were moved onto shared building blocks instead of
+copy-pasted variants. New screens should use these rather than hand-rolling a `Card`/`Row`:
+
+- **Theme** (`ui/theme`): `AppShapes` (cards = `shapes.large` 20dp, badges = `medium`, grouped-row
+  inner corners = `extraSmall`); `StatusTone` (Ok/Warning/Neutral/Error) + `StatusColors` -
+  **stopped is Neutral, not Error**; Error is reserved for real faults (non-OK disk, crashed VM -
+  `VmDomain.crashed`). Ok/Warning stay fixed green/gold under dynamic color. Typography bakes in
+  weights (titles Bold, labelMedium Bold, labelSmall SemiBold) and Inter loads one real weight per
+  `wght` axis value instead of synthesized bold - call sites shouldn't set `fontWeight`.
+- **Components** (`ui/components`): `AppCard`, `ScreenList` (standard list spacing/padding),
+  `SectionHeader`, `StatusDot`/`StatusLine`, `IconBadge` (+ `ContainerIconBadge`/`VmIconBadge`),
+  `ResourceListItem`/`ResourceRowCard`/`ResourceHeaderCard` (Compact/Regular/Header sizes shared by
+  Dashboard previews, tab lists, and action-sheet headers), `ActionSheet`/`ActionSheetItem`
+  (`destructive` = error-colored, used for Stop/Force Stop), `TabTopBar`/`DetailTopBar`/
+  `TabBarActions`, `EmptyState`, `ConfirmActionDialog`, `ParityCheckProgress`.
+- Every tab now shows the notification bell + account icon (`TabBarActions`, built once in
+  `UndroidNavGraph` and passed as `topBarActions`). Tab titles match the nav labels (Docker tab
+  icon is `Layers`, matching the container fallback glyph).
+- Dashboard hero gradient now runs `primary` → 35% towards `onPrimaryContainer` (was →
+  `primaryFixed`, which washed out the white text on its right side in light mode).
+- **Action feedback**: failed actions are no longer silent. ViewModels report failures through the
+  `@Singleton` `UserMessages` (`showFailure("stop plex", failure)` → "Couldn't stop plex: <reason>"),
+  shown by the one `SnackbarHost` on `UndroidNavGraph`'s Scaffold. Start/Stop Array now polls the
+  overview until the new state is visible (like Docker/VM actions), instead of one refresh.
+- **Confirmations** (`ConfirmActionDialog`): Stop Array, Stop Parity Check, VM Force Stop, Dismiss
+  All, Log Out. Plain Docker/VM Stop is deliberately one tap - graceful and easily undone.
+- **Copy conventions**: uppercase only for small overline labels (`SectionHeader`, "ARRAY STATUS",
+  "CPU LOAD"); buttons and actions are Title Case ("Show All", "Dismiss All", "Log Out"); dialog
+  titles are sentence-case questions ("Stop the array?"). It's an "API key" everywhere, never
+  "token". UI strings live inline in composables - `strings.xml` only holds `app_name`. Unused
+  fonts/resources (Open Sans, Chakra Petch light/italic cuts, Inter italic, legacy
+  `dimens.xml`/`attrs.xml`/`font_certs.xml`) were removed.
+- **Login** uses the brand identity: `BrandMark` (the launcher icon's own background color +
+  foreground vector, so it can't drift from the home-screen icon), "Undroid" title, theme shapes
+  for the fields/button, and it scrolls/pads for the keyboard instead of a fixed 150dp top gap.
+- **Pending features**: Shares and Server stay reachable from the "More" tab but show an
+  `EmptyState` "coming soon" message instead of raw placeholder text. Settings' "Show core
+  devices" switch is hidden (the feature is deferred; the setting still persists). What's left to
+  build for all three is tracked in [TODO.md](TODO.md).
 
 ## Open gaps — screens that are stubs
 
-These exist as routes/nav destinations with placeholder text only, no real functionality:
+These exist as routes/nav destinations with a "coming soon" placeholder only, no real
+functionality. The implementation plan for each is in [TODO.md](TODO.md).
 
 - **Shares** (`ui/shares/SharesScreen.kt`) — share list at minimum; full share
   creation/editing is probably desktop-webUI territory, not phone territory.

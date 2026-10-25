@@ -5,7 +5,6 @@ import com.chilisaft.undroid.utils.sanitizeUnraidUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.Response
-import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -23,11 +22,11 @@ class UnraidInterceptor @Inject constructor(private val storage: Storage) : Inte
         if (!rawServerUrl.isNullOrBlank()) {
             val sanitizedUrl = rawServerUrl.sanitizeUnraidUrl()
             val newUrl = sanitizedUrl.toHttpUrlOrNull()
-            
+
             if (newUrl != null) {
                 builder.url(newUrl)
             } else if (overrideUrl != null) {
-                throw IOException("Invalid Server URL: $sanitizedUrl")
+                throw InvalidServerUrlException(sanitizedUrl)
             }
         }
 

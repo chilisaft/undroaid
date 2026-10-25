@@ -51,16 +51,6 @@ class StorageTest {
     }
 
     @Test
-    fun `lastNotification is stored in default preferences`() {
-        val notification = "Test Notification"
-        storage.lastNotification = notification
-        verify { defaultEditor.putString("last_notification", notification) }
-
-        every { defaultPrefs.getString("last_notification", null) } returns notification
-        assertThat(storage.lastNotification).isEqualTo(notification)
-    }
-
-    @Test
     fun `themeMode is stored in default preferences`() {
         storage.themeMode = ThemeMode.DARK
         verify { defaultEditor.putString("theme_mode", "DARK") }
@@ -97,20 +87,5 @@ class StorageTest {
 
         every { defaultPrefs.getBoolean("use_dynamic_color", false) } returns true
         assertThat(storage.useDynamicColor).isTrue()
-    }
-
-    @Test
-    fun `uuid is retrieved from default preferences`() {
-        val uuid = "test-uuid"
-        every { defaultPrefs.getString("uuid", null) } returns uuid
-        assertThat(storage.uuid).isEqualTo(uuid)
-    }
-
-    @Test
-    fun `uuid is generated and stored if not present`() {
-        every { defaultPrefs.getString("uuid", null) } returns null
-        val newUuid = storage.uuid
-        assertThat(newUuid).isNotNull()
-        verify { defaultEditor.putString("uuid", newUuid) }
     }
 }

@@ -3,7 +3,6 @@ package com.chilisaft.undroid.data.repository
 import com.apollographql.apollo.ApolloClient
 import com.chilisaft.undroid.data.api.runWidgetQuery
 import com.chilisaft.undroid.data.models.ArrayStatus
-import com.chilisaft.undroid.data.models.DockerContainerState
 import com.chilisaft.undroid.data.models.DockerContainerSummary
 import com.chilisaft.undroid.data.models.MetricsSample
 import com.chilisaft.undroid.data.models.ApiKeyInfo
@@ -18,10 +17,6 @@ import com.chilisaft.undroid.graphql.ParityCheckStatusQuery
 import com.chilisaft.undroid.graphql.ServerNameQuery
 import com.chilisaft.undroid.graphql.ServerVersionQuery
 import com.chilisaft.undroid.graphql.SystemMetricsQuery
-import com.chilisaft.undroid.graphql.type.ArrayDiskStatus
-import com.chilisaft.undroid.graphql.type.ArrayState
-import com.chilisaft.undroid.graphql.type.ContainerState
-import com.chilisaft.undroid.graphql.type.ParityCheckStatus
 import com.chilisaft.undroid.graphql.type.Role
 import javax.inject.Inject
 import kotlinx.coroutines.delay
@@ -101,36 +96,18 @@ class ServerRepository @Inject constructor(
         val diskStatuses = disks.map { it.status } + parities.map { it.status } + caches.map { it.status }
         return ArrayStatus(
             statusLabel = state.toLabel(),
-            healthy = diskStatuses.isNotEmpty() && diskStatuses.all { it == ArrayDiskStatus.DISK_OK },
+            healthy = diskStatuses.isNotEmpty() && diskStatuses.allHealthy(),
             usedKb = capacity.kilobytes.used.toLongOrNull(),
             totalKb = capacity.kilobytes.total.toLongOrNull(),
             paritySizeKb = parities.firstOrNull()?.size?.toLongOrNull()
         )
     }
 
-    /** See the identical comment on `ArrayRepository.toParityCheckInfo()` - same fix, mirrored here for Dashboard's query. */
-    private fun ParityCheckStatusQuery.ParityCheckStatus.toParityCheckInfo() = ParityCheckInfo(
-        statusLabel = status.toLabel(),
-        running = (running ?: false) || status == ParityCheckStatus.RUNNING,
-        paused = (paused ?: false) || status == ParityCheckStatus.PAUSED,
-        progressPercent = progress,
-        speed = speed,
-        errors = errors,
-        correcting = correcting
-    )
-
     private fun DockerStatusQuery.Container.toDockerContainerSummary() = DockerContainerSummary(
         name = names.firstOrNull()?.removePrefix("/") ?: "Unknown",
         state = state.toDockerContainerState(),
         iconUrl = iconUrl
     )
-
-    private fun ContainerState.toDockerContainerState(): DockerContainerState = when (this) {
-        ContainerState.RUNNING -> DockerContainerState.RUNNING
-        ContainerState.PAUSED -> DockerContainerState.PAUSED
-        ContainerState.EXITED -> DockerContainerState.EXITED
-        ContainerState.UNKNOWN__ -> DockerContainerState.EXITED
-    }
 
     private fun Role.toRoleLabel(): String = when (this) {
         Role.ADMIN -> "Admin"
@@ -140,28 +117,4 @@ class ServerRepository @Inject constructor(
         Role.UNKNOWN__ -> "Unknown"
     }
 
-    private fun ArrayState.toLabel(): String = when (this) {
-        ArrayState.STARTED -> "Array Started"
-        ArrayState.STOPPED -> "Array Stopped"
-        ArrayState.NEW_ARRAY -> "New Array"
-        ArrayState.RECON_DISK -> "Reconstructing Disk"
-        ArrayState.DISABLE_DISK -> "Disk Disabled"
-        ArrayState.SWAP_DSBL -> "Disk Swap Pending"
-        ArrayState.INVALID_EXPANSION -> "Invalid Expansion"
-        ArrayState.PARITY_NOT_BIGGEST -> "Parity Too Small"
-        ArrayState.TOO_MANY_MISSING_DISKS -> "Too Many Missing Disks"
-        ArrayState.NEW_DISK_TOO_SMALL -> "New Disk Too Small"
-        ArrayState.NO_DATA_DISKS -> "No Data Disks"
-        ArrayState.UNKNOWN__ -> "Unknown"
-    }
-
-    private fun ParityCheckStatus.toLabel(): String = when (this) {
-        ParityCheckStatus.NEVER_RUN -> "Never Run"
-        ParityCheckStatus.RUNNING -> "Running"
-        ParityCheckStatus.PAUSED -> "Paused"
-        ParityCheckStatus.COMPLETED -> "Completed"
-        ParityCheckStatus.CANCELLED -> "Cancelled"
-        ParityCheckStatus.FAILED -> "Failed"
-        ParityCheckStatus.UNKNOWN__ -> "Unknown"
-    }
 }

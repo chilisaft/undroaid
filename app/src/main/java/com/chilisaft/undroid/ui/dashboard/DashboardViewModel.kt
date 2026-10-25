@@ -6,9 +6,12 @@ import com.chilisaft.undroid.data.models.ArrayStatus
 import com.chilisaft.undroid.data.models.DockerContainerSummary
 import com.chilisaft.undroid.data.models.ParityCheckInfo
 import com.chilisaft.undroid.data.models.SystemMetrics
+import com.chilisaft.undroid.data.models.VmDomain
 import com.chilisaft.undroid.data.models.WidgetResult
+import com.chilisaft.undroid.data.models.reloading
 import com.chilisaft.undroid.data.repository.NotificationsRepository
 import com.chilisaft.undroid.data.repository.ServerRepository
+import com.chilisaft.undroid.data.repository.VmRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -16,6 +19,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -32,7 +36,10 @@ data class DashboardScreenState(
     val parityCheck: WidgetResult<ParityCheckInfo> = WidgetResult.Loading,
     val systemMetrics: WidgetResult<SystemMetrics> = WidgetResult.Loading,
     val containers: WidgetResult<List<DockerContainerSummary>> = WidgetResult.Loading,
-    val unreadNotificationCount: WidgetResult<Int> = WidgetResult.Loading
+    val vms: WidgetResult<List<VmDomain>> = WidgetResult.Loading,
+    val unreadNotificationCount: WidgetResult<Int> = WidgetResult.Loading,
+    /** A full [DashboardViewModel.refresh] is running - drives the pull-to-refresh indicator, while widgets keep showing their current data. */
+    val isRefreshing: Boolean = false
 )
 
 /**
@@ -44,26 +51,57 @@ data class DashboardScreenState(
 @HiltViewModel
 class DashboardViewModel @Inject constructor(
     private val serverRepository: ServerRepository,
-    private val notificationsRepository: NotificationsRepository
+    private val notificationsRepository: NotificationsRepository,
+    private val vmRepository: VmRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(DashboardScreenState())
     val uiState: StateFlow<DashboardScreenState> = _uiState.asStateFlow()
 
     private var parityCheckPollJob: Job? = null
+    private var liveMetricsJob: Job? = null
+
+    /** Whether the Dashboard is currently on screen - polling only runs while it is. */
+    private var isVisible = false
+    private var hasBeenVisible = false
 
     init {
         refresh()
-        observeLiveMetrics()
     }
 
     /**
-     * Polls CPU/memory once a second, merging each reading into the system metrics widget
-     * once it has an initial value to update. Runs for the lifetime of the ViewModel - no
-     * need to restart on [refreshSystemMetrics].
+     * The Dashboard became visible (tab selected, returned from a drill-in screen, or the app came
+     * back to the foreground). Starts the live polls and - on every visit after the first, which
+     * `init` already covers - refreshes everything, since this ViewModel outlives tab switches and
+     * would otherwise keep showing whatever it last fetched.
      */
-    private fun observeLiveMetrics() {
-        viewModelScope.launch {
+    fun onScreenVisible() {
+        isVisible = true
+        if (hasBeenVisible) refresh() else hasBeenVisible = true
+        startLiveMetrics()
+        if (_uiState.value.parityCheck.isParityCheckRunning()) startParityCheckPollingIfNeeded()
+    }
+
+    /**
+     * The Dashboard left the screen (another tab, a drill-in screen, or the app went to the
+     * background). Stops every poll - they used to run for the ViewModel's whole lifetime,
+     * hitting the server once a second even with the app in the background.
+     */
+    fun onScreenHidden() {
+        isVisible = false
+        liveMetricsJob?.cancel()
+        liveMetricsJob = null
+        stopParityCheckPolling()
+    }
+
+    /**
+     * Polls CPU/memory once a second while the Dashboard is visible, merging each reading into the
+     * system metrics widget once it has an initial value to update. No need to restart on
+     * [refreshSystemMetrics].
+     */
+    private fun startLiveMetrics() {
+        if (liveMetricsJob?.isActive == true) return
+        liveMetricsJob = viewModelScope.launch {
             serverRepository.observeSystemMetricsPoll().collect { sample ->
                 _uiState.update {
                     it.mapSystemMetrics { metrics ->
@@ -74,38 +112,85 @@ class DashboardViewModel @Inject constructor(
         }
     }
 
+    /** Reloads every widget at once (pull-to-refresh, revisiting the tab), keeping current data on screen meanwhile. */
     fun refresh() {
-        refreshServerName()
-        refreshArrayStatus()
-        refreshParityCheck()
-        refreshSystemMetrics()
-        refreshContainers()
-        refreshUnreadCount()
-    }
-
-    fun refreshServerName() {
         viewModelScope.launch {
-            val result = serverRepository.getServerName()
-            if (result is WidgetResult.Success) {
-                _uiState.update { it.copy(serverName = result.data) }
-            }
+            _uiState.update { it.copy(isRefreshing = true) }
+            listOf(
+                launch { loadServerName() },
+                launch { loadArrayStatus() },
+                launch { loadParityCheck() },
+                launch { loadSystemMetrics() },
+                launch { loadContainers() },
+                launch { loadVms() },
+                launch { loadUnreadCount() }
+            ).joinAll()
+            _uiState.update { it.copy(isRefreshing = false) }
         }
     }
 
     fun refreshArrayStatus() {
-        viewModelScope.launch {
-            _uiState.update { it.copy(arrayStatus = WidgetResult.Loading) }
-            _uiState.update { it.copy(arrayStatus = serverRepository.getArrayStatus()) }
-        }
+        viewModelScope.launch { loadArrayStatus() }
     }
 
     fun refreshParityCheck() {
-        viewModelScope.launch {
-            _uiState.update { it.copy(parityCheck = WidgetResult.Loading) }
-            val result = serverRepository.getParityCheckStatus()
-            _uiState.update { it.copy(parityCheck = result) }
-            if (result.isParityCheckRunning()) startParityCheckPollingIfNeeded() else stopParityCheckPolling()
+        viewModelScope.launch { loadParityCheck() }
+    }
+
+    fun refreshSystemMetrics() {
+        viewModelScope.launch { loadSystemMetrics() }
+    }
+
+    fun refreshContainers() {
+        viewModelScope.launch { loadContainers() }
+    }
+
+    /** Reuses [VmRepository.getVms] - the VMS resource is already its own permission group and the schema has no separate trimmed-summary shape to query, unlike Docker's full container list. */
+    fun refreshVms() {
+        viewModelScope.launch { loadVms() }
+    }
+
+    /** Called on load and whenever the user returns from the Notifications screen. */
+    fun refreshUnreadCount() {
+        viewModelScope.launch { loadUnreadCount() }
+    }
+
+    private suspend fun loadServerName() {
+        val result = serverRepository.getServerName()
+        if (result is WidgetResult.Success) {
+            _uiState.update { it.copy(serverName = result.data) }
         }
+    }
+
+    private suspend fun loadArrayStatus() {
+        _uiState.update { it.copy(arrayStatus = it.arrayStatus.reloading()) }
+        _uiState.update { it.copy(arrayStatus = serverRepository.getArrayStatus()) }
+    }
+
+    private suspend fun loadParityCheck() {
+        _uiState.update { it.copy(parityCheck = it.parityCheck.reloading()) }
+        val result = serverRepository.getParityCheckStatus()
+        _uiState.update { it.copy(parityCheck = result) }
+        if (result.isParityCheckRunning()) startParityCheckPollingIfNeeded() else stopParityCheckPolling()
+    }
+
+    private suspend fun loadSystemMetrics() {
+        _uiState.update { it.copy(systemMetrics = it.systemMetrics.reloading()) }
+        _uiState.update { it.copy(systemMetrics = serverRepository.getSystemMetrics()) }
+    }
+
+    private suspend fun loadContainers() {
+        _uiState.update { it.copy(containers = it.containers.reloading()) }
+        _uiState.update { it.copy(containers = serverRepository.getDockerContainers()) }
+    }
+
+    private suspend fun loadVms() {
+        _uiState.update { it.copy(vms = it.vms.reloading()) }
+        _uiState.update { it.copy(vms = vmRepository.getVms()) }
+    }
+
+    private suspend fun loadUnreadCount() {
+        _uiState.update { it.copy(unreadNotificationCount = notificationsRepository.getUnreadCount()) }
     }
 
     /**
@@ -121,7 +206,7 @@ class DashboardViewModel @Inject constructor(
      * the last error on screen with no way to recover short of a manual retry.
      */
     private fun startParityCheckPollingIfNeeded() {
-        if (parityCheckPollJob?.isActive == true) return
+        if (!isVisible || parityCheckPollJob?.isActive == true) return
         parityCheckPollJob = viewModelScope.launch {
             while (isActive) {
                 delay(PARITY_POLL_INTERVAL_MS)
@@ -143,27 +228,6 @@ class DashboardViewModel @Inject constructor(
 
     private fun WidgetResult<ParityCheckInfo>.isParityCheckRunning(): Boolean =
         (this as? WidgetResult.Success)?.data?.running == true
-
-    fun refreshSystemMetrics() {
-        viewModelScope.launch {
-            _uiState.update { it.copy(systemMetrics = WidgetResult.Loading) }
-            _uiState.update { it.copy(systemMetrics = serverRepository.getSystemMetrics()) }
-        }
-    }
-
-    fun refreshContainers() {
-        viewModelScope.launch {
-            _uiState.update { it.copy(containers = WidgetResult.Loading) }
-            _uiState.update { it.copy(containers = serverRepository.getDockerContainers()) }
-        }
-    }
-
-    /** Called on load and whenever the user returns from the Notifications screen. */
-    fun refreshUnreadCount() {
-        viewModelScope.launch {
-            _uiState.update { it.copy(unreadNotificationCount = notificationsRepository.getUnreadCount()) }
-        }
-    }
 
     private companion object {
         const val PARITY_POLL_INTERVAL_MS = 5_000L
