@@ -3,6 +3,7 @@ package com.chilisaft.undroid.ui.server
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.chilisaft.undroid.data.models.ConnectInfo
+import com.chilisaft.undroid.data.models.LicenceDates
 import com.chilisaft.undroid.data.models.NetworkSummary
 import com.chilisaft.undroid.data.models.ServerIdentity
 import com.chilisaft.undroid.data.models.ServerSystem
@@ -11,6 +12,7 @@ import com.chilisaft.undroid.data.models.reloading
 import com.chilisaft.undroid.data.repository.ServerNetworkRepository
 import com.chilisaft.undroid.data.repository.ServerRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -21,6 +23,8 @@ import javax.inject.Inject
 
 data class ServerScreenState(
     val identity: WidgetResult<ServerIdentity> = WidgetResult.Loading,
+    /** Shown inside the identity card when present; a failure (e.g. no REGISTRATION permission) just leaves them out. */
+    val licenceDates: WidgetResult<LicenceDates> = WidgetResult.Loading,
     val system: WidgetResult<ServerSystem> = WidgetResult.Loading,
     /** Null data = the server reports no primary interface. */
     val network: WidgetResult<NetworkSummary?> = WidgetResult.Loading,
@@ -87,7 +91,8 @@ class ServerViewModel @Inject constructor(
         viewModelScope.launch { loadConnect() }
     }
 
-    private suspend fun loadIdentity() {
+    private suspend fun loadIdentity() = coroutineScope {
+        launch { _uiState.update { it.copy(licenceDates = serverRepository.getLicenceDates()) } }
         _uiState.update { it.copy(identity = it.identity.reloading()) }
         _uiState.update { it.copy(identity = serverRepository.getServerIdentity()) }
     }

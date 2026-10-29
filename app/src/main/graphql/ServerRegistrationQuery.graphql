@@ -1,0 +1,8 @@
+# Its own query: `registration` needs the REGISTRATION permission, not VARS like the rest of the
+# identity section. Only the dates - the licence type and state come from `vars`.
+query ServerRegistrationQuery {
+    registration {
+        expiration
+        updateExpiration
+    }
+}

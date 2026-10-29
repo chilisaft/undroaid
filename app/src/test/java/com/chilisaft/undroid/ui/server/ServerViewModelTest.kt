@@ -2,6 +2,7 @@ package com.chilisaft.undroid.ui.server
 
 import com.chilisaft.undroid.data.models.ConnectInfo
 import com.chilisaft.undroid.data.models.ConnectStatus
+import com.chilisaft.undroid.data.models.LicenceDates
 import com.chilisaft.undroid.data.models.NetworkSummary
 import com.chilisaft.undroid.data.models.ServerIdentity
 import com.chilisaft.undroid.data.models.ServerSystem
@@ -33,7 +34,7 @@ class ServerViewModelTest {
 
     private val identity = ServerIdentity(name = "TOWER", comment = null, timeZone = null, licence = "Pro")
     private val system = ServerSystem(
-        unraidVersion = "7.3.3", apiVersion = null, kernel = null, bootTimeIso = null, cpu = null, cpuCores = null,
+        unraidVersion = "7.3.3", apiVersion = null, kernel = null, dockerVersion = null, bootTimeIso = null, cpu = null, cpuCores = null,
         cpuThreads = null, memoryTotalBytes = null, memoryType = null, motherboard = null
     )
     private val network = NetworkSummary("br0", "192.168.69.7", 1000)
@@ -44,6 +45,7 @@ class ServerViewModelTest {
         Dispatchers.setMain(testDispatcher)
         repository = mockk {
             coEvery { getServerIdentity() } returns WidgetResult.Success(identity)
+            coEvery { getLicenceDates() } returns WidgetResult.Success(LicenceDates(expiresAt = null, updatesUntil = null))
             coEvery { getServerSystem() } returns WidgetResult.Success(system)
             coEvery { getConnectInfo() } returns WidgetResult.Success(connect)
         }
@@ -173,5 +175,16 @@ class ServerViewModelTest {
         testDispatcher.scheduler.advanceUntilIdle()
         coVerify(exactly = 1) { networkRepository.fetch() }
         assertThat(viewModel.uiState.value.isRefreshing).isFalse()
+    }
+
+    @Test
+    fun `missing licence dates don't affect the identity section`() {
+        coEvery { repository.getLicenceDates() } returns WidgetResult.Failure(permissionDenied = true, message = null)
+
+        val viewModel = ServerViewModel(repository, networkRepository)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.identity).isEqualTo(WidgetResult.Success(identity))
+        assertThat(viewModel.uiState.value.licenceDates).isEqualTo(WidgetResult.Failure(permissionDenied = true, message = null))
     }
 }

@@ -4,5 +4,6 @@ query ServerIdentityQuery {
         comment
         timeZone
         regTy
+        regState
     }
 }

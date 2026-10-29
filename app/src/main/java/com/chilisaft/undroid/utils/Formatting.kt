@@ -2,6 +2,9 @@ package com.chilisaft.undroid.utils
 
 import java.time.Duration
 import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 /**
  * Formats a size given in kilobytes (as returned by the Unraid API) into a human-readable
@@ -33,6 +36,10 @@ fun String.toUptimeLabel(now: Instant = Instant.now()): String? {
     val minutes = (totalSeconds % 3600) / 60
     return "%dd %02dh %02dm".format(days, hours, minutes)
 }
+
+/** A calendar date in the device's time zone, e.g. "12 Nov 2026". */
+fun Instant.toDateLabel(zone: ZoneId = ZoneId.systemDefault(), locale: Locale = Locale.getDefault()): String =
+    atZone(zone).format(DateTimeFormatter.ofPattern("d MMM yyyy", locale))
 
 /**
  * Estimated time remaining for a parity check: remaining bytes (the size being scanned, minus

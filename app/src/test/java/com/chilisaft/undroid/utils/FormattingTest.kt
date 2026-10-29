@@ -2,6 +2,8 @@ package com.chilisaft.undroid.utils
 
 import com.google.common.truth.Truth.assertThat
 import java.time.Instant
+import java.time.ZoneId
+import java.util.Locale
 import org.junit.Test
 
 class FormattingTest {
@@ -40,6 +42,12 @@ class FormattingTest {
         val now = Instant.parse("2024-01-01T00:00:00Z")
         val bootTime = "2024-01-02T00:00:00Z"
         assertThat(bootTime.toUptimeLabel(now)).isNull()
+    }
+
+    @Test
+    fun `toDateLabel shows the date in the given zone`() {
+        val berlin = ZoneId.of("Europe/Berlin")
+        assertThat(Instant.parse("2026-12-31T23:30:00Z").toDateLabel(berlin, Locale.ENGLISH)).isEqualTo("1 Jan 2027")
     }
 
     @Test

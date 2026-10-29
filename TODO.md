@@ -38,9 +38,12 @@ Possible follow-ups:
 
 More tab -> Server: four independently loading sections, each needing its own API-key
 permission (same pattern as the Dashboard widgets):
-- **Identity** (`vars`, VARS): name, comment, time zone, licence tag (`regTy`).
-- **System** (`info`, INFO): Unraid/API/kernel versions, uptime, CPU, cores/threads, total RAM +
-  type, motherboard.
+- **Identity** (`vars`, VARS): name, comment, time zone, licence tag (`regTy`), and a warning
+  line when `regState` is one of Unraid's E* error states. Licence dates (trial expiry, "updates
+  until") come from `registration` (REGISTRATION permission, own query) and are simply left out
+  when missing or not permitted - a real Basic key sends expiration "0" and no update date.
+- **System** (`info`, INFO): Unraid/API/kernel/Docker versions, uptime, CPU, cores/threads,
+  total RAM + type, motherboard.
 - **Network** (`info.primaryNetwork`, INFO): interface + IP. Split out of System on 2026-10-29
   because it alone took ~2 s of System's ~2.8 s; cached (see NOTES.md → Data-layer conventions).
 - **Unraid Connect** (`server`, SERVERS): status (Online / Offline / "Not set up" when `server`
@@ -53,9 +56,8 @@ Checked against a real server (Unraid 7.3.3), which corrected the first version:
 - `InfoCpu.brand` already contains the vendor and ®/™ marks ("Gen Intel® Core™ i3-12100") - tidied
   to "Intel Core i3-12100".
 
-Possible follow-ups:
-- [ ] Registration state (`vars.regState`, e.g. expired/blacklisted key) as a warning line.
-- [ ] Copy-to-clipboard on long-press for IPs/URLs.
+Long-press copies IPs and URLs (`InfoRow(copyText = ...)`). Licence-date format (Unix seconds vs
+milliseconds) is only verified for a key without dates - check against a trial or newer key.
 
 ---
 

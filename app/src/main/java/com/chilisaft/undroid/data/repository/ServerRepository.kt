@@ -6,6 +6,8 @@ import com.chilisaft.undroid.data.models.ApiKeyInfo
 import com.chilisaft.undroid.data.models.ArrayStatus
 import com.chilisaft.undroid.data.models.ConnectInfo
 import com.chilisaft.undroid.data.models.ConnectStatus
+import com.chilisaft.undroid.data.models.LicenceDates
+import com.chilisaft.undroid.data.models.LicenceProblem
 import com.chilisaft.undroid.data.models.DockerContainerSummary
 import com.chilisaft.undroid.data.models.MetricsSample
 import com.chilisaft.undroid.data.models.ParityCheckInfo
@@ -21,12 +23,15 @@ import com.chilisaft.undroid.graphql.ParityCheckStatusQuery
 import com.chilisaft.undroid.graphql.ServerConnectQuery
 import com.chilisaft.undroid.graphql.ServerIdentityQuery
 import com.chilisaft.undroid.graphql.ServerNameQuery
+import com.chilisaft.undroid.graphql.ServerRegistrationQuery
 import com.chilisaft.undroid.graphql.ServerSystemQuery
 import com.chilisaft.undroid.graphql.ServerVersionQuery
 import com.chilisaft.undroid.graphql.SystemMetricsQuery
+import com.chilisaft.undroid.graphql.type.RegistrationState
 import com.chilisaft.undroid.graphql.type.RegistrationType
 import com.chilisaft.undroid.graphql.type.Role
 import com.chilisaft.undroid.graphql.type.ServerStatus
+import java.time.Instant
 import javax.inject.Inject
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -82,7 +87,16 @@ class ServerRepository @Inject constructor(
                 name = data.vars.name?.nonBlank(),
                 comment = data.vars.comment?.nonBlank(),
                 timeZone = data.vars.timeZone?.nonBlank(),
-                licence = data.vars.regTy?.toLabel()
+                licence = data.vars.regTy?.toLabel(),
+                licenceProblem = data.vars.regState?.toLicenceProblem()
+            )
+        }
+
+    suspend fun getLicenceDates(): WidgetResult<LicenceDates> =
+        apolloClient.runWidgetQuery(ServerRegistrationQuery()) { data ->
+            LicenceDates(
+                expiresAt = data.registration?.expiration?.toLicenceInstant(),
+                updatesUntil = data.registration?.updateExpiration?.toLicenceInstant()
             )
         }
 
@@ -142,6 +156,7 @@ class ServerRepository @Inject constructor(
             unraidVersion = versions.core.unraid?.nonBlank(),
             apiVersion = versions.core.api?.nonBlank(),
             kernel = versions.core.kernel?.nonBlank(),
+            dockerVersion = versions.packages?.docker?.nonBlank(),
             bootTimeIso = os.uptime,
             cpu = cpuName(cpu.manufacturer, cpu.brand),
             cpuCores = cpu.cores,
@@ -204,6 +219,33 @@ class ServerRepository @Inject constructor(
         RegistrationType.INVALID -> "Invalid"
         RegistrationType.TRIAL -> "Trial"
         RegistrationType.UNKNOWN__ -> "Unknown"
+    }
+
+    private fun RegistrationState.toLicenceProblem(): LicenceProblem? = when (this) {
+        RegistrationState.EEXPIRED -> LicenceProblem.TRIAL_EXPIRED
+        RegistrationState.ETRIAL -> LicenceProblem.TRIAL_INVALID
+        RegistrationState.EGUID, RegistrationState.EGUID1 -> LicenceProblem.WRONG_FLASH_DRIVE
+        RegistrationState.EBLACKLISTED, RegistrationState.EBLACKLISTED1, RegistrationState.EBLACKLISTED2 -> LicenceProblem.BLACKLISTED
+        RegistrationState.ENOKEYFILE, RegistrationState.ENOKEYFILE1, RegistrationState.ENOKEYFILE2 -> LicenceProblem.NO_KEY_FILE
+        RegistrationState.ENOFLASH, RegistrationState.ENOFLASH1, RegistrationState.ENOFLASH2, RegistrationState.ENOFLASH3,
+        RegistrationState.ENOFLASH4, RegistrationState.ENOFLASH5, RegistrationState.ENOFLASH6, RegistrationState.ENOFLASH7 -> LicenceProblem.NO_FLASH_DRIVE
+        RegistrationState.ENOCONN -> LicenceProblem.NOT_VALIDATED
+        else -> null
+    }
+
+    /**
+     * The schema types the licence dates as plain strings. A real Basic key sent expiration "0" (no
+     * expiry); Unraid keeps these as Unix timestamps, so accept seconds or milliseconds, and ISO
+     * text in case the API ever formats them. 0, blank or unparsable means "no date".
+     */
+    private fun String.toLicenceInstant(): Instant? {
+        val number = trim().toLongOrNull()
+        return when {
+            number == null -> runCatching { Instant.parse(trim()) }.getOrNull()
+            number <= 0 -> null
+            number < 100_000_000_000L -> Instant.ofEpochSecond(number)
+            else -> Instant.ofEpochMilli(number)
+        }
     }
 
     private fun String.nonBlank(): String? = takeIf { it.isNotBlank() }

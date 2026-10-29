@@ -9,6 +9,9 @@ query ServerSystemQuery {
                 api
                 kernel
             }
+            packages {
+                docker
+            }
         }
         cpu {
             manufacturer

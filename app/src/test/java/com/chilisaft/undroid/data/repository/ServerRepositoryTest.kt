@@ -3,9 +3,12 @@ package com.chilisaft.undroid.data.repository
 import com.apollographql.apollo.ApolloClient
 import com.chilisaft.undroid.data.models.DockerContainerState
 import com.chilisaft.undroid.data.models.ConnectStatus
+import com.chilisaft.undroid.data.models.LicenceDates
+import com.chilisaft.undroid.data.models.LicenceProblem
 import com.chilisaft.undroid.data.models.WidgetResult
 import com.chilisaft.undroid.graphql.ServerConnectQuery
 import com.google.common.truth.Truth.assertThat
+import java.time.Instant
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
@@ -381,7 +384,7 @@ class ServerRepositoryTest {
 
     @Test
     fun `getServerIdentity maps name, comment, time zone and licence, blanks as null`() = runBlocking {
-        mockWebServer.enqueue(MockResponse().setBody("""{"data": {"vars": {"name": "TOWER", "comment": " ", "timeZone": "Europe/Zurich", "regTy": "PRO"}}}"""))
+        mockWebServer.enqueue(MockResponse().setBody("""{"data": {"vars": {"name": "TOWER", "comment": " ", "timeZone": "Europe/Zurich", "regTy": "PRO", "regState": "PRO"}}}"""))
 
         val identity = (repository.getServerIdentity() as WidgetResult.Success).data
 
@@ -389,6 +392,63 @@ class ServerRepositoryTest {
         assertThat(identity.comment).isNull()
         assertThat(identity.timeZone).isEqualTo("Europe/Zurich")
         assertThat(identity.licence).isEqualTo("Pro")
+        assertThat(identity.licenceProblem).isNull()
+    }
+
+    @Test
+    fun `getServerIdentity reports Unraid's licence error states, grouped`() = runBlocking {
+        val expected = mapOf(
+            "EEXPIRED" to LicenceProblem.TRIAL_EXPIRED,
+            "EGUID1" to LicenceProblem.WRONG_FLASH_DRIVE,
+            "EBLACKLISTED2" to LicenceProblem.BLACKLISTED,
+            "ENOFLASH4" to LicenceProblem.NO_FLASH_DRIVE,
+            "ENOCONN" to LicenceProblem.NOT_VALIDATED,
+            "BASIC" to null
+        )
+        expected.forEach { (state, problem) ->
+            mockWebServer.enqueue(
+                MockResponse().setBody("""{"data": {"vars": {"name": "T", "comment": null, "timeZone": null, "regTy": "TRIAL", "regState": "$state"}}}""")
+            )
+            val identity = (repository.getServerIdentity() as WidgetResult.Success).data
+            assertThat(identity.licenceProblem).isEqualTo(problem)
+        }
+    }
+
+    @Test
+    fun `getLicenceDates treats a real Basic key's "0" and null as no dates`() = runBlocking {
+        mockWebServer.enqueue(
+            MockResponse().setBody("""{"data": {"registration": {"expiration": "0", "updateExpiration": null}}}""")
+        )
+
+        val dates = (repository.getLicenceDates() as WidgetResult.Success).data
+
+        assertThat(dates).isEqualTo(LicenceDates(expiresAt = null, updatesUntil = null))
+    }
+
+    @Test
+    fun `getLicenceDates reads Unix seconds, milliseconds and ISO dates`() = runBlocking {
+        mockWebServer.enqueue(
+            MockResponse().setBody("""{"data": {"registration": {"expiration": "1793232000", "updateExpiration": "1793232000000"}}}""")
+        )
+        val dates = (repository.getLicenceDates() as WidgetResult.Success).data
+        assertThat(dates.expiresAt).isEqualTo(Instant.ofEpochSecond(1_793_232_000))
+        assertThat(dates.updatesUntil).isEqualTo(Instant.ofEpochSecond(1_793_232_000))
+
+        mockWebServer.enqueue(
+            MockResponse().setBody("""{"data": {"registration": {"expiration": "2026-11-12T00:00:00Z", "updateExpiration": "soon"}}}""")
+        )
+        val isoDates = (repository.getLicenceDates() as WidgetResult.Success).data
+        assertThat(isoDates.expiresAt).isEqualTo(Instant.parse("2026-11-12T00:00:00Z"))
+        assertThat(isoDates.updatesUntil).isNull()
+    }
+
+    @Test
+    fun `getLicenceDates copes with no registration at all`() = runBlocking {
+        mockWebServer.enqueue(MockResponse().setBody("""{"data": {"registration": null}}"""))
+
+        val dates = (repository.getLicenceDates() as WidgetResult.Success).data
+
+        assertThat(dates).isEqualTo(LicenceDates(expiresAt = null, updatesUntil = null))
     }
 
     @Test
@@ -396,7 +456,7 @@ class ServerRepositoryTest {
         val json = """
         {"data": {"info": {
           "os": {"uptime": "2026-10-10T08:00:00Z"},
-          "versions": {"core": {"unraid": "7.3.3", "api": "4.20.0", "kernel": "6.12.24-Unraid"}},
+          "versions": {"core": {"unraid": "7.3.3", "api": "4.20.0", "kernel": "6.12.24-Unraid"}, "packages": {"docker": "29.8.2"}},
           "cpu": {"manufacturer": "Intel", "brand": "Core i5-12400", "cores": 6, "threads": 12},
           "memory": {"layout": [{"size": "17179869184", "type": "DDR4"}, {"size": "17179869184", "type": "DDR4"}]},
           "baseboard": {"manufacturer": "ASUSTeK", "model": "PRIME B660M-A"}
@@ -408,6 +468,7 @@ class ServerRepositoryTest {
 
         assertThat(system.unraidVersion).isEqualTo("7.3.3")
         assertThat(system.apiVersion).isEqualTo("4.20.0")
+        assertThat(system.dockerVersion).isEqualTo("29.8.2")
         assertThat(system.cpu).isEqualTo("Intel Core i5-12400")
         assertThat(system.cpuCores).isEqualTo(6)
         assertThat(system.cpuThreads).isEqualTo(12)
@@ -421,7 +482,7 @@ class ServerRepositoryTest {
         val json = """
         {"data": {"info": {
           "os": {"uptime": null},
-          "versions": {"core": {"unraid": "7.3.3", "api": null, "kernel": null}},
+          "versions": {"core": {"unraid": "7.3.3", "api": null, "kernel": null}, "packages": {"docker": " "}},
           "cpu": {"manufacturer": "Intel", "brand": "Gen Intel® Core™ i3-12100", "cores": 4, "threads": 8},
           "memory": {"layout": [{"size": "16777216", "type": "DDR4"}, {"size": "16777216", "type": "DDR4"}]},
           "baseboard": {"manufacturer": "ASRock", "model": "H610M-ITX/ac"}
@@ -433,6 +494,7 @@ class ServerRepositoryTest {
 
         assertThat(system.memoryTotalBytes).isEqualTo(34_359_738_368L) // 32 GiB
         assertThat(system.cpu).isEqualTo("Intel Core i3-12100")
+        assertThat(system.dockerVersion).isNull()
     }
 
     @Test
@@ -440,7 +502,7 @@ class ServerRepositoryTest {
         val json = """
         {"data": {"info": {
           "os": {"uptime": null},
-          "versions": {"core": {"unraid": null, "api": null, "kernel": null}},
+          "versions": {"core": {"unraid": null, "api": null, "kernel": null}, "packages": null},
           "cpu": {"manufacturer": null, "brand": null, "cores": null, "threads": null},
           "memory": {"layout": [{"size": "8589934592", "type": "DDR4"}, {"size": "8589934592", "type": "DDR5"}]},
           "baseboard": {"manufacturer": null, "model": null}

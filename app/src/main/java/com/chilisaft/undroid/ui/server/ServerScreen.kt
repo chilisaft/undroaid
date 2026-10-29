@@ -28,6 +28,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.chilisaft.undroid.data.models.ConnectInfo
 import com.chilisaft.undroid.data.models.ConnectStatus
+import com.chilisaft.undroid.data.models.LicenceDates
+import com.chilisaft.undroid.data.models.LicenceProblem
 import com.chilisaft.undroid.data.models.NetworkSummary
 import com.chilisaft.undroid.data.models.ServerIdentity
 import com.chilisaft.undroid.data.models.ServerSystem
@@ -45,7 +47,9 @@ import com.chilisaft.undroid.ui.theme.AppTheme
 import com.chilisaft.undroid.ui.theme.StatusTone
 import com.chilisaft.undroid.ui.theme.spacing
 import com.chilisaft.undroid.utils.kilobytesToHumanReadable
+import com.chilisaft.undroid.utils.toDateLabel
 import com.chilisaft.undroid.utils.toUptimeLabel
+import java.time.Instant
 
 @Composable
 fun ServerScreen(onBack: () -> Unit = {}, viewModel: ServerViewModel = hiltViewModel()) {
@@ -86,7 +90,9 @@ fun ServerScreenContent(
         ) {
             ScreenList {
                 item {
-                    WidgetSection(result = uiState.identity, onRetry = onRetryIdentity, minHeight = 96.dp) { IdentityCard(it) }
+                    WidgetSection(result = uiState.identity, onRetry = onRetryIdentity, minHeight = 96.dp) {
+                        IdentityCard(it, (uiState.licenceDates as? WidgetResult.Success)?.data)
+                    }
                 }
                 item { SectionHeader("System") }
                 item {
@@ -106,7 +112,7 @@ fun ServerScreenContent(
 }
 
 @Composable
-private fun IdentityCard(identity: ServerIdentity) {
+private fun IdentityCard(identity: ServerIdentity, licenceDates: LicenceDates?) {
     val spacing = MaterialTheme.spacing
     AppCard {
         Column(modifier = Modifier.padding(spacing.medium), verticalArrangement = Arrangement.spacedBy(spacing.extraSmall)) {
@@ -123,9 +129,40 @@ private fun IdentityCard(identity: ServerIdentity) {
             identity.timeZone?.let {
                 Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+            identity.licenceProblem?.let { problem ->
+                StatusLine(
+                    tone = if (problem == LicenceProblem.NOT_VALIDATED) StatusTone.Warning else StatusTone.Error,
+                    text = problem.label(),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Text(
+                    "See Tools → Registration in the webUI.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            licenceDates?.let { dates -> licenceDatesLabel(dates, Instant.now()) }?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
     }
 }
+
+private fun LicenceProblem.label(): String = when (this) {
+    LicenceProblem.TRIAL_EXPIRED -> "Trial has expired"
+    LicenceProblem.TRIAL_INVALID -> "Trial licence problem"
+    LicenceProblem.WRONG_FLASH_DRIVE -> "Licence key is for a different flash drive"
+    LicenceProblem.BLACKLISTED -> "Licence key is blacklisted"
+    LicenceProblem.NO_KEY_FILE -> "No licence key file found"
+    LicenceProblem.NO_FLASH_DRIVE -> "Boot flash drive not recognised"
+    LicenceProblem.NOT_VALIDATED -> "Licence couldn't be validated"
+}
+
+/** "Licence expires 12 Nov 2026 · Updates until 3 Mar 2027" - whichever dates exist, past tense once passed. */
+private fun licenceDatesLabel(dates: LicenceDates, now: Instant): String? = listOfNotNull(
+    dates.expiresAt?.let { if (it.isAfter(now)) "Licence expires ${it.toDateLabel()}" else "Licence expired ${it.toDateLabel()}" },
+    dates.updatesUntil?.let { if (it.isAfter(now)) "Updates until ${it.toDateLabel()}" else "Updates ended ${it.toDateLabel()}" }
+).joinToString(" · ").takeIf { it.isNotEmpty() }
 
 @Composable
 private fun SystemCard(system: ServerSystem) {
@@ -135,6 +172,7 @@ private fun SystemCard(system: ServerSystem) {
             system.unraidVersion?.let { InfoRow("Unraid", it) }
             system.apiVersion?.let { InfoRow("API", it) }
             system.kernel?.let { InfoRow("Kernel", it) }
+            system.dockerVersion?.let { InfoRow("Docker", it) }
             system.bootTimeIso?.toUptimeLabel()?.let { InfoRow("Uptime", it) }
             HorizontalDivider()
             system.cpu?.let { InfoRow("CPU", it) }
@@ -160,7 +198,7 @@ private fun NetworkCard(network: NetworkSummary?) {
                 )
             } else {
                 InfoRow("Interface", networkLabel(network))
-                network.ipAddress?.let { InfoRow("IP address", it) }
+                network.ipAddress?.let { InfoRow("IP address", it, copyText = it) }
             }
         }
     }
@@ -191,12 +229,12 @@ private fun ConnectCard(connect: ConnectInfo) {
                 )
             }
             connect.owner?.let { InfoRow("Account", it) }
-            connect.lanIp?.let { InfoRow("LAN IP", it) }
+            connect.lanIp?.let { InfoRow("LAN IP", it, copyText = it) }
             connect.wanIp?.let { wanIp ->
-                InfoRow("WAN IP", if (showWanIp) wanIp else "Tap to show", onClick = { showWanIp = !showWanIp })
+                InfoRow("WAN IP", if (showWanIp) wanIp else "Tap to show", onClick = { showWanIp = !showWanIp }, copyText = wanIp)
             }
-            connect.localUrl?.let { url -> InfoRow("Local URL", url, onClick = { uriHandler.tryOpenUri(url) }) }
-            connect.remoteUrl?.let { url -> InfoRow("Remote URL", url, onClick = { uriHandler.tryOpenUri(url) }) }
+            connect.localUrl?.let { url -> InfoRow("Local URL", url, onClick = { uriHandler.tryOpenUri(url) }, copyText = url) }
+            connect.remoteUrl?.let { url -> InfoRow("Remote URL", url, onClick = { uriHandler.tryOpenUri(url) }, copyText = url) }
         }
     }
 }
@@ -220,7 +258,7 @@ private val previewState = ServerScreenState(
     identity = WidgetResult.Success(ServerIdentity(name = "Tower", comment = "Media server", timeZone = "Europe/Zurich", licence = "Pro")),
     system = WidgetResult.Success(
         ServerSystem(
-            unraidVersion = "7.3.3", apiVersion = "4.20.0", kernel = "6.12.24-Unraid", bootTimeIso = "2026-10-10T08:00:00Z",
+            unraidVersion = "7.3.3", apiVersion = "4.20.0", kernel = "6.12.24-Unraid", dockerVersion = "27.5.1", bootTimeIso = "2026-10-10T08:00:00Z",
             cpu = "Intel Core i5-12400", cpuCores = 6, cpuThreads = 12, memoryTotalBytes = 34_359_738_368L, memoryType = "DDR4",
             motherboard = "ASUSTeK PRIME B660M-A"
         )
@@ -250,6 +288,21 @@ fun ServerScreenPartialPreview() {
         ServerScreenContent(
             uiState = previewState.copy(
                 connect = WidgetResult.Failure(permissionDenied = true, message = null)
+            )
+        )
+    }
+}
+
+@Preview(name = "Expired trial with licence dates", showBackground = true)
+@Composable
+fun ServerScreenLicenceProblemPreview() {
+    AppTheme {
+        ServerScreenContent(
+            uiState = previewState.copy(
+                identity = WidgetResult.Success(
+                    ServerIdentity(name = "Tower", comment = null, timeZone = "Europe/Zurich", licence = "Trial", licenceProblem = LicenceProblem.TRIAL_EXPIRED)
+                ),
+                licenceDates = WidgetResult.Success(LicenceDates(expiresAt = Instant.parse("2026-10-01T00:00:00Z"), updatesUntil = null))
             )
         )
     }
