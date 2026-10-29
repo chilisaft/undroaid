@@ -52,6 +52,7 @@ import com.chilisaft.undroid.ui.devices.DevicesScreen
 import com.chilisaft.undroid.ui.docker.DockerScreen
 import com.chilisaft.undroid.ui.notifications.NotificationsScreen
 import com.chilisaft.undroid.ui.server.ServerScreen
+import com.chilisaft.undroid.ui.licences.LicencesScreen
 import com.chilisaft.undroid.ui.settings.SettingsScreen
 import com.chilisaft.undroid.ui.shares.SharesScreen
 import com.chilisaft.undroid.ui.usermenu.UserMenuSheet
@@ -65,6 +66,7 @@ private const val NOTIFICATIONS_ROUTE = "notifications"
 private const val SHARES_ROUTE = "shares"
 private const val SERVER_ROUTE = "server"
 private const val DEVICES_ROUTE = "devices"
+private const val LICENCES_ROUTE = "licences"
 
 /**
  * Destinations shown as tabs in the bottom bar. Shares, Server and Devices are lower-frequency
@@ -240,7 +242,10 @@ fun UndroidNavGraph(
                 DevicesScreen(onBack = { navController.popBackStack() })
             }
             composable(SETTINGS_ROUTE) {
-                SettingsScreen(onBack = { navController.popBackStack() })
+                SettingsScreen(onBack = { navController.popBackStack() }, onOpenLicences = { navController.navigate(LICENCES_ROUTE) })
+            }
+            composable(LICENCES_ROUTE) {
+                LicencesScreen(onBack = { navController.popBackStack() })
             }
             composable(NOTIFICATIONS_ROUTE) {
                 NotificationsScreen(

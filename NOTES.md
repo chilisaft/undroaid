@@ -377,6 +377,24 @@ Card containers were barely visible against their screen background - see below.
   Not warmed at app start: that would stall the Dashboard's first queries. Measure per field (and
   concurrently) before splitting or caching anything else.
 
+## Settings and About (2026-10-29)
+
+- **Start tab** (`StartTab`): read once in `UndroidActivity` and passed down as the logged-in
+  graph's start destination - a change applies from the next app start.
+- **Live updates** (`LiveUpdateSpeed`): 1 s / 3 s / 10 s / Off for CPU+memory, with temperature
+  and network at 5 / 10 / 30 s. Off stops both polls; temperatures then load with each refresh,
+  and the network card says "Live updates off" (the server only measures throughput between two
+  of its calls, so a single call has no meaningful rate).
+- **Temperature unit**: readings are converted to Celsius in `ServerRepository` (the server can
+  report F/K/R), and shown via `LocalTemperatureUnit` (provided at the app root) + `format()`.
+- **Dashboard cards**: hidden cards are neither fetched nor polled. Settings only change while
+  the Dashboard is hidden, so `DashboardViewModel` re-reads them on every visit.
+- **About & Help**: version, GPLv3, website (the GitHub repo), "Report a Problem" (a new GitHub
+  issue with `DebugInfo` in the body), "Copy Debug Info", and an open-source licence list
+  generated at build time by the AboutLibraries plugin (`LicencesScreen`). `DebugInfo` holds app,
+  Android, device and Unraid/API versions - never the server URL or the key, since it ends up in
+  public issues. No contact email yet (the user chose GitHub only for now).
+
 ## UI design system (2026-10-25)
 
 After a consistency review, screens were moved onto shared building blocks instead of

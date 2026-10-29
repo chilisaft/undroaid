@@ -1,5 +1,13 @@
 package com.chilisaft.undroid.ui.settings
 
+import io.mockk.coEvery
+import com.chilisaft.undroid.data.repository.ServerRepository
+import com.chilisaft.undroid.data.models.WidgetResult
+import com.chilisaft.undroid.data.models.ServerVersions
+import com.chilisaft.undroid.data.models.DashboardCards
+import com.chilisaft.undroid.data.models.TemperatureUnit
+import com.chilisaft.undroid.data.models.LiveUpdateSpeed
+import com.chilisaft.undroid.data.models.StartTab
 import com.chilisaft.undroid.data.models.ThemeMode
 import com.chilisaft.undroid.data.repository.SettingsRepository
 import com.google.common.truth.Truth.assertThat
@@ -21,6 +29,7 @@ class SettingsViewModelTest {
 
     private lateinit var viewModel: SettingsViewModel
     private lateinit var settingsRepository: SettingsRepository
+    private lateinit var serverRepository: ServerRepository
 
     private val themeModeFlow = MutableStateFlow(ThemeMode.SYSTEM)
     private val showCoreListFlow = MutableStateFlow(false)
@@ -35,8 +44,15 @@ class SettingsViewModelTest {
             every { themeMode } returns themeModeFlow
             every { showCoreList } returns showCoreListFlow
             every { useDynamicColor } returns useDynamicColorFlow
+            every { startTab } returns MutableStateFlow(StartTab.DOCKER)
+            every { liveUpdateSpeed } returns MutableStateFlow(LiveUpdateSpeed.SLOW)
+            every { temperatureUnit } returns MutableStateFlow(TemperatureUnit.FAHRENHEIT)
+            every { dashboardCards } returns MutableStateFlow(DashboardCards(vms = false))
         }
-        viewModel = SettingsViewModel(settingsRepository)
+        serverRepository = mockk {
+            coEvery { getServerVersions() } returns WidgetResult.Success(ServerVersions("7.3.4", "4.37.9"))
+        }
+        viewModel = SettingsViewModel(settingsRepository, serverRepository)
     }
 
     @After
@@ -85,4 +101,16 @@ class SettingsViewModelTest {
         verify { settingsRepository.setUseDynamicColor(false) }
     }
 
+
+    @Test
+    fun `state carries the new preferences and the server versions for the debug info`() {
+        testDispatcher.scheduler.advanceUntilIdle()
+        val state = viewModel.uiState.value
+        assertThat(state.startTab).isEqualTo(StartTab.DOCKER)
+        assertThat(state.liveUpdateSpeed).isEqualTo(LiveUpdateSpeed.SLOW)
+        assertThat(state.temperatureUnit).isEqualTo(TemperatureUnit.FAHRENHEIT)
+        assertThat(state.dashboardCards).isEqualTo(DashboardCards(vms = false))
+        assertThat(state.debugInfo.unraidVersion).isEqualTo("7.3.4")
+        assertThat(state.debugInfo.apiVersion).isEqualTo("4.37.9")
+    }
 }

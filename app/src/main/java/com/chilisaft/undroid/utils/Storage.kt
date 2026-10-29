@@ -1,6 +1,10 @@
 package com.chilisaft.undroid.utils
 
 import android.content.SharedPreferences
+import com.chilisaft.undroid.data.models.DashboardCards
+import com.chilisaft.undroid.data.models.LiveUpdateSpeed
+import com.chilisaft.undroid.data.models.StartTab
+import com.chilisaft.undroid.data.models.TemperatureUnit
 import com.chilisaft.undroid.data.models.ThemeMode
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -48,6 +52,34 @@ class Storage @Inject constructor(
         get() = preferences.getBoolean(KEY_USE_DYNAMIC_COLOR, false)
         set(value) = preferences.edit() { putBoolean(KEY_USE_DYNAMIC_COLOR, value) }
 
+    var startTab: StartTab
+        get() = enumPreference(KEY_START_TAB, StartTab.HOME)
+        set(value) = preferences.edit() { putString(KEY_START_TAB, value.name) }
+
+    var liveUpdateSpeed: LiveUpdateSpeed
+        get() = enumPreference(KEY_LIVE_UPDATE_SPEED, LiveUpdateSpeed.FAST)
+        set(value) = preferences.edit() { putString(KEY_LIVE_UPDATE_SPEED, value.name) }
+
+    var temperatureUnit: TemperatureUnit
+        get() = enumPreference(KEY_TEMPERATURE_UNIT, TemperatureUnit.CELSIUS)
+        set(value) = preferences.edit() { putString(KEY_TEMPERATURE_UNIT, value.name) }
+
+    var dashboardCards: DashboardCards
+        get() = DashboardCards(
+            sensors = preferences.getBoolean(KEY_CARD_SENSORS, true),
+            docker = preferences.getBoolean(KEY_CARD_DOCKER, true),
+            vms = preferences.getBoolean(KEY_CARD_VMS, true)
+        )
+        set(value) = preferences.edit() {
+            putBoolean(KEY_CARD_SENSORS, value.sensors)
+            putBoolean(KEY_CARD_DOCKER, value.docker)
+            putBoolean(KEY_CARD_VMS, value.vms)
+        }
+
+    /** A stored enum by name, or [default] when unset or no longer a valid value. */
+    private inline fun <reified T : Enum<T>> enumPreference(key: String, default: T): T =
+        preferences.getString(key, null)?.let { stored -> runCatching { enumValueOf<T>(stored) }.getOrNull() } ?: default
+
     companion object {
         private const val KEY_API_TOKEN = "api_token"
         private const val KEY_SERVER_URL = "serverUrl"
@@ -55,5 +87,11 @@ class Storage @Inject constructor(
         private const val KEY_THEME_MODE = "theme_mode"
         private const val KEY_SHOW_CORE_LIST = "show_core_list"
         private const val KEY_USE_DYNAMIC_COLOR = "use_dynamic_color"
+        private const val KEY_START_TAB = "start_tab"
+        private const val KEY_LIVE_UPDATE_SPEED = "live_update_speed"
+        private const val KEY_TEMPERATURE_UNIT = "temperature_unit"
+        private const val KEY_CARD_SENSORS = "dashboard_card_sensors"
+        private const val KEY_CARD_DOCKER = "dashboard_card_docker"
+        private const val KEY_CARD_VMS = "dashboard_card_vms"
     }
 }

@@ -3,6 +3,7 @@ query ServerVersionQuery {
         versions {
             core {
                 unraid
+                api
             }
         }
     }

@@ -1,5 +1,9 @@
 package com.chilisaft.undroid.ui.dashboard
 
+import kotlinx.coroutines.flow.MutableStateFlow
+import com.chilisaft.undroid.data.repository.SettingsRepository
+import com.chilisaft.undroid.data.models.LiveUpdateSpeed
+import com.chilisaft.undroid.data.models.DashboardCards
 import com.chilisaft.undroid.data.models.ArrayStatus
 import com.chilisaft.undroid.data.models.MetricsSample
 import com.chilisaft.undroid.data.models.NetworkRate
@@ -40,6 +44,9 @@ class DashboardViewModelTest {
     private lateinit var notificationsRepository: NotificationsRepository
     private lateinit var vmRepository: VmRepository
     private lateinit var serverNetworkRepository: ServerNetworkRepository
+    private lateinit var settingsRepository: SettingsRepository
+    private val cardsFlow = MutableStateFlow(DashboardCards())
+    private val speedFlow = MutableStateFlow(LiveUpdateSpeed.FAST)
 
     private val testDispatcher = StandardTestDispatcher()
 
@@ -68,12 +75,16 @@ class DashboardViewModelTest {
             coEvery { getParityCheckStatus() } returns WidgetResult.Success(parityCheck())
             coEvery { getSystemMetrics() } returns WidgetResult.Success(testSystemMetrics)
             coEvery { getDockerContainers() } returns WidgetResult.Success(emptyList())
-            every { observeSystemMetricsPoll() } returns metricsPollFlow
+            every { observeSystemMetricsPoll(any()) } returns metricsPollFlow
             every { observeSensorsPoll(any(), any()) } returns sensorsPollFlow
             coEvery { getTemperatures() } returns WidgetResult.Success(TemperatureOverview(emptyList(), 0, 0))
             coEvery { getNetworkRate(any()) } returns WidgetResult.Success(NetworkRate("br0", 0.0, 0.0))
         }
         serverNetworkRepository = mockk { every { cached() } returns null }
+        settingsRepository = mockk {
+            every { dashboardCards } returns cardsFlow
+            every { liveUpdateSpeed } returns speedFlow
+        }
         notificationsRepository = mockk {
             coEvery { getUnreadCount() } returns WidgetResult.Success(0)
         }
@@ -87,7 +98,7 @@ class DashboardViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun createViewModel() = DashboardViewModel(repository, notificationsRepository, vmRepository, serverNetworkRepository)
+    private fun createViewModel() = DashboardViewModel(repository, notificationsRepository, vmRepository, serverNetworkRepository, settingsRepository)
 
     @Test
     fun `initial state is loading for every widget`() {
@@ -395,5 +406,35 @@ class DashboardViewModelTest {
         testDispatcher.scheduler.runCurrent()
 
         assertThat(viewModel.uiState.value.temperatures).isEqualTo(denied)
+    }
+
+    @Test
+    fun `hidden cards are neither fetched nor polled`() {
+        cardsFlow.value = DashboardCards(sensors = false, docker = false, vms = false)
+        viewModel = createViewModel()
+        viewModel.onScreenVisible()
+        testDispatcher.scheduler.runCurrent()
+
+        coVerify(exactly = 0) { repository.getDockerContainers() }
+        coVerify(exactly = 0) { vmRepository.getVms() }
+        verify(exactly = 0) { repository.observeSensorsPoll(any(), any()) }
+    }
+
+    @Test
+    fun `live updates follow the chosen speed, and off stops polling`() {
+        speedFlow.value = LiveUpdateSpeed.SLOW
+        viewModel = createViewModel()
+        viewModel.onScreenVisible()
+        testDispatcher.scheduler.runCurrent()
+        verify { repository.observeSystemMetricsPoll(10_000) }
+        verify { repository.observeSensorsPoll(any(), 30_000) }
+
+        viewModel.onScreenHidden()
+        speedFlow.value = LiveUpdateSpeed.OFF
+        viewModel.onScreenVisible()
+        testDispatcher.scheduler.runCurrent()
+        assertThat(viewModel.uiState.value.liveUpdatesOff).isTrue()
+        verify(exactly = 1) { repository.observeSystemMetricsPoll(any()) }
+        coVerify { repository.getTemperatures() }
     }
 }

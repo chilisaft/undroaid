@@ -17,6 +17,7 @@ object UndroidGraph {
 @Composable
 fun RootNavGraph(
     userMessages: Flow<String>,
+    startTabRoute: String = BottomNavDestination.Dashboard.route,
     navController: NavHostController = rememberNavController(),
     startDestination: String = UndroidGraph.AUTH_ROUTE
 ) {
@@ -31,6 +32,7 @@ fun RootNavGraph(
         composable(route = UndroidGraph.UNDROID_ROUTE) {
             UndroidNavGraph(
                 userMessages = userMessages,
+                startDestination = startTabRoute,
                 onLoggedOut = navController::navigateToLoginAfterLogout
             )
             ApiKeyRejectedDialog(onLogInAgain = navController::navigateToLoginAfterLogout)

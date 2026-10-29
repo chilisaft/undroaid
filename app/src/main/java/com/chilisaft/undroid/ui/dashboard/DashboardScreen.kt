@@ -139,7 +139,7 @@ fun DashboardScreenContent(
                     }
                 }
 
-                item {
+                if (uiState.cards.sensors) item {
                     // Same height side by side, whichever card's content is taller.
                     Row(
                         modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
@@ -151,8 +151,14 @@ fun DashboardScreenContent(
                             }
                         }
                         Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
-                            WidgetSection(result = uiState.network, onRetry = onRetryNetwork, minHeight = 110.dp) { rate ->
-                                NetworkCard(rate, modifier = Modifier.fillMaxSize())
+                            // The server measures throughput between two of its calls - without
+                            // polling there's no rate to show.
+                            if (uiState.liveUpdatesOff) {
+                                NetworkCard(rate = null, modifier = Modifier.fillMaxSize(), emptyText = "Live updates off")
+                            } else {
+                                WidgetSection(result = uiState.network, onRetry = onRetryNetwork, minHeight = 110.dp) { rate ->
+                                    NetworkCard(rate, modifier = Modifier.fillMaxSize())
+                                }
                             }
                         }
                     }

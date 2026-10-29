@@ -47,7 +47,10 @@ import com.chilisaft.undroid.ui.components.TagChip
 import com.chilisaft.undroid.ui.components.WidgetSection
 import com.chilisaft.undroid.ui.theme.StatusTone
 import com.chilisaft.undroid.ui.theme.AppTheme
+import com.chilisaft.undroid.ui.theme.LocalTemperatureUnit
+import com.chilisaft.undroid.ui.theme.format
 import com.chilisaft.undroid.ui.theme.spacing
+import com.chilisaft.undroid.data.models.TemperatureUnit
 import com.chilisaft.undroid.utils.kilobytesToHumanReadable
 
 @Composable
@@ -234,7 +237,7 @@ private fun ArrayDeviceRowContent(device: ArrayDeviceInfo, identificationLine: S
             }
             Spacer(Modifier.height(spacing.extraSmall))
             Text(
-                text = deviceSummaryLine(device),
+                text = deviceSummaryLine(device, LocalTemperatureUnit.current),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
@@ -346,13 +349,13 @@ private fun PoolCard(poolName: String, devices: List<ArrayDeviceInfo>, identific
     }
 }
 
-private fun deviceSummaryLine(device: ArrayDeviceInfo): String {
+private fun deviceSummaryLine(device: ArrayDeviceInfo, unit: TemperatureUnit): String {
     val parts = mutableListOf<String>()
     device.sizeKb?.let { parts += it.kilobytesToHumanReadable() }
     if (device.usedKb != null && device.freeKb != null) {
         parts += "${device.usedKb.kilobytesToHumanReadable()} used"
     }
-    device.tempC?.let { parts += "${it}°C" }
+    device.tempC?.let { parts += unit.format(it.toDouble()) }
     device.isSpinning?.let { parts += if (it) "Spinning" else "Standby" }
     if (device.health != DeviceHealth.OK) device.statusLabel?.let { parts += it }
     return if (parts.isEmpty()) "No data" else parts.joinToString(" · ")

@@ -70,7 +70,7 @@ fun InfoRow(label: String, value: String, onClick: (() -> Unit)? = null, copyTex
  * only for older versions (minSdk 28) - showing both would announce the copy twice.
  */
 @Composable
-private fun rememberCopyToClipboard(label: String, text: String): () -> Unit {
+fun rememberCopyToClipboard(label: String, text: String): () -> Unit {
     val clipboard = LocalClipboard.current
     val haptics = LocalHapticFeedback.current
     val context = LocalContext.current

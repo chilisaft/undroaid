@@ -10,7 +10,9 @@ import androidx.activity.viewModels
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
@@ -23,6 +25,7 @@ import com.chilisaft.undroid.graphs.RootNavGraph
 import com.chilisaft.undroid.graphs.UndroidGraph
 import com.chilisaft.undroid.ui.UserMessages
 import com.chilisaft.undroid.ui.theme.AppTheme
+import com.chilisaft.undroid.ui.theme.LocalTemperatureUnit
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
@@ -50,6 +53,7 @@ class UndroidActivity : ComponentActivity() {
         setContent {
             val themeMode by settingsRepository.themeMode.collectAsState()
             val useDynamicColor by settingsRepository.useDynamicColor.collectAsState()
+            val temperatureUnit by settingsRepository.temperatureUnit.collectAsState()
             val darkTheme = when (themeMode) {
                 ThemeMode.SYSTEM -> isSystemInDarkTheme()
                 ThemeMode.LIGHT -> false
@@ -65,19 +69,23 @@ class UndroidActivity : ComponentActivity() {
                 onDispose {}
             }
             AppTheme(darkTheme = darkTheme, dynamicColor = useDynamicColor) {
-                Surface(modifier = Modifier.fillMaxSize()) {
-                    val startupState by appStartupViewModel.state.collectAsState()
-                    // Nothing is drawn while Loading - the splash screen is still covering the
-                    // window at that point, so there's no frame for a placeholder to matter.
-                    if (startupState != AppStartupState.Loading) {
-                        RootNavGraph(
-                            userMessages = userMessages.messages,
-                            startDestination = if (startupState == AppStartupState.LoggedIn) {
-                                UndroidGraph.UNDROID_ROUTE
-                            } else {
-                                UndroidGraph.AUTH_ROUTE
-                            }
-                        )
+                CompositionLocalProvider(LocalTemperatureUnit provides temperatureUnit) {
+                    Surface(modifier = Modifier.fillMaxSize()) {
+                        val startupState by appStartupViewModel.state.collectAsState()
+                        // Nothing is drawn while Loading - the splash screen is still covering the
+                        // window at that point, so there's no frame for a placeholder to matter.
+                        if (startupState != AppStartupState.Loading) {
+                            RootNavGraph(
+                                userMessages = userMessages.messages,
+                                // Read once - changing it in Settings applies from the next app start.
+                                startTabRoute = remember { settingsRepository.startTab.value.route },
+                                startDestination = if (startupState == AppStartupState.LoggedIn) {
+                                    UndroidGraph.UNDROID_ROUTE
+                                } else {
+                                    UndroidGraph.AUTH_ROUTE
+                                }
+                            )
+                        }
                     }
                 }
             }

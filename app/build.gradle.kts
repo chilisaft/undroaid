@@ -8,6 +8,7 @@ plugins {
     alias(libs.plugins.hilt)
     alias(libs.plugins.compose.compiler)
     alias(libs.plugins.kotlin.allopen)
+    alias(libs.plugins.aboutlibraries)
 }
 
 allOpen {
@@ -76,6 +77,7 @@ dependencies {
     // Hilt
     implementation(libs.hilt.android.core)
     implementation(libs.androidx.hilt.navigation.compose)
+    implementation(libs.aboutlibraries.compose.m3)
     implementation(libs.androidx.preference.ktx)
     ksp(libs.hilt.compiler)
     // Hilt's aggregating javac step bundles its own kotlin-metadata-jvm reader, which lags

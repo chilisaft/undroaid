@@ -3,6 +3,7 @@ package com.chilisaft.undroid.ui.dashboard
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.chilisaft.undroid.data.models.ArrayStatus
+import com.chilisaft.undroid.data.models.DashboardCards
 import com.chilisaft.undroid.data.models.DockerContainerSummary
 import com.chilisaft.undroid.data.models.NetworkRate
 import com.chilisaft.undroid.data.models.ParityCheckInfo
@@ -14,6 +15,7 @@ import com.chilisaft.undroid.data.models.reloading
 import com.chilisaft.undroid.data.repository.NotificationsRepository
 import com.chilisaft.undroid.data.repository.ServerNetworkRepository
 import com.chilisaft.undroid.data.repository.ServerRepository
+import com.chilisaft.undroid.data.repository.SettingsRepository
 import com.chilisaft.undroid.data.repository.VmRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -48,6 +50,10 @@ data class DashboardScreenState(
     val containers: WidgetResult<List<DockerContainerSummary>> = WidgetResult.Loading,
     val vms: WidgetResult<List<VmDomain>> = WidgetResult.Loading,
     val unreadNotificationCount: WidgetResult<Int> = WidgetResult.Loading,
+    /** Which optional cards Settings shows - hidden ones aren't fetched. */
+    val cards: DashboardCards = DashboardCards(),
+    /** Live updates are off in Settings - the network card has no rate to show (see [network]). */
+    val liveUpdatesOff: Boolean = false,
     /** A full [DashboardViewModel.refresh] is running - drives the pull-to-refresh indicator, while widgets keep showing their current data. */
     val isRefreshing: Boolean = false
 )
@@ -63,7 +69,8 @@ class DashboardViewModel @Inject constructor(
     private val serverRepository: ServerRepository,
     private val notificationsRepository: NotificationsRepository,
     private val vmRepository: VmRepository,
-    private val serverNetworkRepository: ServerNetworkRepository
+    private val serverNetworkRepository: ServerNetworkRepository,
+    private val settingsRepository: SettingsRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(DashboardScreenState())
@@ -78,7 +85,15 @@ class DashboardViewModel @Inject constructor(
     private var hasBeenVisible = false
 
     init {
+        applySettings()
         refresh()
+    }
+
+    /** Settings can only change while the Dashboard is hidden, so they're re-read on each visit. */
+    private fun applySettings() {
+        _uiState.update {
+            it.copy(cards = settingsRepository.dashboardCards.value, liveUpdatesOff = settingsRepository.liveUpdateSpeed.value.metricsMillis == null)
+        }
     }
 
     /**
@@ -89,7 +104,12 @@ class DashboardViewModel @Inject constructor(
      */
     fun onScreenVisible() {
         isVisible = true
-        if (hasBeenVisible) refresh() else hasBeenVisible = true
+        if (hasBeenVisible) {
+            applySettings()
+            refresh()
+        } else {
+            hasBeenVisible = true
+        }
         startLiveMetrics()
         startSensorsPoll()
         if (_uiState.value.parityCheck.isParityCheckRunning()) startParityCheckPollingIfNeeded()
@@ -116,8 +136,9 @@ class DashboardViewModel @Inject constructor(
      */
     private fun startLiveMetrics() {
         if (liveMetricsJob?.isActive == true) return
+        val intervalMillis = settingsRepository.liveUpdateSpeed.value.metricsMillis ?: return
         liveMetricsJob = viewModelScope.launch {
-            serverRepository.observeSystemMetricsPoll().collect { sample ->
+            serverRepository.observeSystemMetricsPoll(intervalMillis).collect { sample ->
                 _uiState.update {
                     it.mapSystemMetrics { metrics ->
                         metrics.copy(cpuLoadPercent = sample.cpuLoadPercent, memoryLoadPercent = sample.memoryLoadPercent)
@@ -134,9 +155,10 @@ class DashboardViewModel @Inject constructor(
      * reading after a pause can be 0.
      */
     private fun startSensorsPoll() {
-        if (sensorsJob?.isActive == true) return
+        if (sensorsJob?.isActive == true || !_uiState.value.cards.sensors) return
+        val intervalMillis = settingsRepository.liveUpdateSpeed.value.sensorsMillis ?: return
         sensorsJob = viewModelScope.launch {
-            serverRepository.observeSensorsPoll({ serverNetworkRepository.cached()?.network?.interfaceName }).collect { sample ->
+            serverRepository.observeSensorsPoll({ serverNetworkRepository.cached()?.network?.interfaceName }, intervalMillis).collect { sample ->
                 _uiState.update {
                     it.copy(
                         temperatures = it.temperatures.keepOnFailure(sample.temperatures),
@@ -156,8 +178,10 @@ class DashboardViewModel @Inject constructor(
                 launch { loadArrayStatus() },
                 launch { loadParityCheck() },
                 launch { loadSystemMetrics() },
-                launch { loadContainers() },
-                launch { loadVms() },
+                launch { if (_uiState.value.cards.docker) loadContainers() },
+                launch { if (_uiState.value.cards.vms) loadVms() },
+                // With live updates on, the sensors poll loads these; off, only a refresh does.
+                launch { if (_uiState.value.cards.sensors && _uiState.value.liveUpdatesOff) loadTemperatures() },
                 launch { loadUnreadCount() }
             ).joinAll()
             _uiState.update { it.copy(isRefreshing = false) }

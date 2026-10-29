@@ -19,6 +19,7 @@ import com.chilisaft.undroid.data.models.TemperatureSensorReading
 import com.chilisaft.undroid.data.models.ParityCheckInfo
 import com.chilisaft.undroid.data.models.ServerIdentity
 import com.chilisaft.undroid.data.models.ServerSystem
+import com.chilisaft.undroid.data.models.ServerVersions
 import com.chilisaft.undroid.data.models.SystemMetrics
 import com.chilisaft.undroid.data.models.WidgetResult
 import com.chilisaft.undroid.graphql.ApiKeyInfoQuery
@@ -65,6 +66,10 @@ class ServerRepository @Inject constructor(
 
     suspend fun getServerVersion(): WidgetResult<String?> =
         apolloClient.runWidgetQuery(ServerVersionQuery()) { it.info.versions.core.unraid }
+
+    /** Unraid and API versions, for the debug info in Settings. */
+    suspend fun getServerVersions(): WidgetResult<ServerVersions> =
+        apolloClient.runWidgetQuery(ServerVersionQuery()) { ServerVersions(it.info.versions.core.unraid, it.info.versions.core.api) }
 
     /**
      * The schema's `me` field resolves to whatever identity is authenticating the request -
@@ -212,22 +217,24 @@ class ServerRepository @Inject constructor(
             SensorType.VRM -> SensorKind.VRM
             else -> SensorKind.OTHER
         },
-        value = current.value,
-        unitSymbol = when (current.unit) {
-            TemperatureUnit.FAHRENHEIT -> "°F"
-            TemperatureUnit.KELVIN -> " K"
-            TemperatureUnit.RANKINE -> "°R"
-            else -> "°C"
-        },
+        celsius = current.value.toCelsius(current.unit),
         level = when (current.status) {
             TemperatureStatus.NORMAL -> TemperatureLevel.NORMAL
             TemperatureStatus.WARNING -> TemperatureLevel.WARNING
             TemperatureStatus.CRITICAL -> TemperatureLevel.CRITICAL
             else -> TemperatureLevel.UNKNOWN
         },
-        warning = warning,
-        critical = critical
+        // The limits come in the same unit as the reading.
+        warningCelsius = warning?.toCelsius(current.unit),
+        criticalCelsius = critical?.toCelsius(current.unit)
     )
+
+    private fun Double.toCelsius(unit: TemperatureUnit): Double = when (unit) {
+        TemperatureUnit.FAHRENHEIT -> (this - 32) * 5 / 9
+        TemperatureUnit.KELVIN -> this - 273.15
+        TemperatureUnit.RANKINE -> (this - 491.67) * 5 / 9
+        else -> this
+    }
 
     private fun ServerSystemQuery.Info.toServerSystem(): ServerSystem {
         val modules = memory.layout

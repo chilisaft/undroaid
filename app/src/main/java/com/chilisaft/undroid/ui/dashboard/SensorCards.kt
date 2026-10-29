@@ -38,9 +38,12 @@ import com.chilisaft.undroid.data.models.SensorKind
 import com.chilisaft.undroid.data.models.TemperatureLevel
 import com.chilisaft.undroid.data.models.TemperatureOverview
 import com.chilisaft.undroid.data.models.TemperatureSensorReading
+import com.chilisaft.undroid.data.models.TemperatureUnit
 import com.chilisaft.undroid.ui.components.AppCard
 import com.chilisaft.undroid.ui.components.StatusLine
+import com.chilisaft.undroid.ui.theme.LocalTemperatureUnit
 import com.chilisaft.undroid.ui.theme.StatusTone
+import com.chilisaft.undroid.ui.theme.format
 import com.chilisaft.undroid.ui.theme.color
 import com.chilisaft.undroid.ui.theme.spacing
 import com.chilisaft.undroid.utils.bytesPerSecondToLabel
@@ -83,10 +86,11 @@ fun TemperatureCard(temperatures: TemperatureOverview, modifier: Modifier = Modi
         onClick = if (temperatures.sensors.isNotEmpty()) ({ showSensors = true }) else null
     ) {
         Row(verticalAlignment = Alignment.Bottom) {
-            Text(headline?.value?.let { "%.0f".format(it) } ?: "—", style = MaterialTheme.typography.headlineLarge)
+            val unit = LocalTemperatureUnit.current
+            Text(headline?.celsius?.let { "%.0f".format(unit.fromCelsius(it)) } ?: "—", style = MaterialTheme.typography.headlineLarge)
             if (headline != null) {
                 Text(
-                    headline.unitSymbol.trim(),
+                    unit.symbol,
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.padding(bottom = 6.dp, start = MaterialTheme.spacing.extraSmall)
                 )
@@ -121,6 +125,7 @@ internal fun TemperatureOverview.summaryLine(headline: TemperatureSensorReading?
 @Composable
 private fun SensorList(sensors: List<TemperatureSensorReading>) {
     val spacing = MaterialTheme.spacing
+    val unit = LocalTemperatureUnit.current
     Text("Temperatures", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(horizontal = spacing.medium))
     LazyColumn(
         modifier = Modifier.padding(horizontal = spacing.medium),
@@ -132,20 +137,20 @@ private fun SensorList(sensors: List<TemperatureSensorReading>) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(sensor.kind.label, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold))
                     Text(sensor.name, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    sensor.limitsLine()?.let {
+                    sensor.limitsLine(unit)?.let {
                         Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
-                StatusLine(tone = sensor.level.tone, text = "%.1f%s".format(sensor.value, sensor.unitSymbol), style = MaterialTheme.typography.bodyMedium)
+                StatusLine(tone = sensor.level.tone, text = unit.format(sensor.celsius, decimals = 1), style = MaterialTheme.typography.bodyMedium)
             }
         }
     }
     Spacer(Modifier.height(spacing.large))
 }
 
-private fun TemperatureSensorReading.limitsLine(): String? = listOfNotNull(
-    warning?.let { "warm at %.0f%s".format(it, unitSymbol) },
-    critical?.let { "hot at %.0f%s".format(it, unitSymbol) }
+private fun TemperatureSensorReading.limitsLine(unit: TemperatureUnit): String? = listOfNotNull(
+    warningCelsius?.let { "warm at ${unit.format(it)}" },
+    criticalCelsius?.let { "hot at ${unit.format(it)}" }
 ).joinToString(" · ").ifEmpty { null }
 
 private val TemperatureLevel.tone: StatusTone
@@ -158,7 +163,7 @@ private val TemperatureLevel.tone: StatusTone
 
 /** Download and upload of the main interface, refreshed with the temperature. */
 @Composable
-fun NetworkCard(rate: NetworkRate?, modifier: Modifier = Modifier) {
+fun NetworkCard(rate: NetworkRate?, modifier: Modifier = Modifier, emptyText: String = "No interface") {
     SensorCard(
         modifier = modifier,
         label = rate?.interfaceName?.let { "NETWORK · $it" } ?: "NETWORK",
@@ -166,7 +171,7 @@ fun NetworkCard(rate: NetworkRate?, modifier: Modifier = Modifier) {
         iconTint = MaterialTheme.colorScheme.tertiary
     ) {
         if (rate == null) {
-            Text("No interface", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(emptyText, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         } else {
             RateLine(Icons.Filled.ArrowDownward, rate.rxBytesPerSecond.bytesPerSecondToLabel(), "Download")
             RateLine(Icons.Filled.ArrowUpward, rate.txBytesPerSecond.bytesPerSecondToLabel(), "Upload")
@@ -185,8 +190,8 @@ private fun RateLine(icon: ImageVector, text: String, description: String) {
 
 internal val previewTemperatures = TemperatureOverview(
     sensors = listOf(
-        TemperatureSensorReading("1", "coretemp-isa-0000 Package id 0", SensorKind.CPU_PACKAGE, 42.0, "°C", TemperatureLevel.NORMAL, 70.0, 85.0),
-        TemperatureSensorReading("2", "nvme-pci-0200 Composite", SensorKind.NVME, 39.85, "°C", TemperatureLevel.NORMAL, null, null)
+        TemperatureSensorReading("1", "coretemp-isa-0000 Package id 0", SensorKind.CPU_PACKAGE, 42.0, TemperatureLevel.NORMAL, 70.0, 85.0),
+        TemperatureSensorReading("2", "nvme-pci-0200 Composite", SensorKind.NVME, 39.85, TemperatureLevel.NORMAL, null, null)
     ),
     warningCount = 0,
     criticalCount = 0

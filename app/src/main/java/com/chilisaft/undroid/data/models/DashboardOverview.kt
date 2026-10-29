@@ -37,18 +37,18 @@ data class TemperatureOverview(
 ) {
     /** The CPU package if there is one, otherwise the hottest sensor. */
     val headline: TemperatureSensorReading?
-        get() = sensors.firstOrNull { it.kind == SensorKind.CPU_PACKAGE } ?: sensors.maxByOrNull { it.value }
+        get() = sensors.firstOrNull { it.kind == SensorKind.CPU_PACKAGE } ?: sensors.maxByOrNull { it.celsius }
 }
 
 data class TemperatureSensorReading(
     val id: String,
     val name: String,
     val kind: SensorKind,
-    val value: Double,
-    val unitSymbol: String,
+    /** Converted to Celsius whatever unit the server reports in; shown in the unit chosen in Settings. */
+    val celsius: Double,
     val level: TemperatureLevel,
-    val warning: Double?,
-    val critical: Double?
+    val warningCelsius: Double?,
+    val criticalCelsius: Double?
 )
 
 enum class SensorKind(val label: String) {

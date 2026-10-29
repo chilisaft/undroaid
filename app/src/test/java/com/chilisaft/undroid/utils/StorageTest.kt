@@ -1,5 +1,8 @@
 package com.chilisaft.undroid.utils
 
+import com.chilisaft.undroid.data.models.DashboardCards
+import com.chilisaft.undroid.data.models.LiveUpdateSpeed
+import com.chilisaft.undroid.data.models.StartTab
 import android.content.SharedPreferences
 import com.chilisaft.undroid.data.models.ThemeMode
 import com.google.common.truth.Truth.assertThat
@@ -93,5 +96,16 @@ class StorageTest {
 
         every { defaultPrefs.getBoolean("use_dynamic_color", false) } returns true
         assertThat(storage.useDynamicColor).isTrue()
+    }
+
+    @Test
+    fun `new preferences fall back to their defaults when unset or invalid`() {
+        every { defaultPrefs.getString("start_tab", null) } returns null
+        every { defaultPrefs.getString("live_update_speed", null) } returns "NOT_A_SPEED"
+        every { defaultPrefs.getBoolean(any(), true) } returns true
+
+        assertThat(storage.startTab).isEqualTo(StartTab.HOME)
+        assertThat(storage.liveUpdateSpeed).isEqualTo(LiveUpdateSpeed.FAST)
+        assertThat(storage.dashboardCards).isEqualTo(DashboardCards())
     }
 }

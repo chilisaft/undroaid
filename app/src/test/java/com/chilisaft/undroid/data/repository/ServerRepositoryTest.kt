@@ -576,7 +576,7 @@ class ServerRepositoryTest {
         assertThat(overview.warningCount).isEqualTo(1)
         assertThat(overview.sensors[0].level).isEqualTo(TemperatureLevel.WARNING)
         assertThat(overview.headline?.kind).isEqualTo(SensorKind.CPU_PACKAGE)
-        assertThat(overview.headline?.unitSymbol).isEqualTo("°C")
+        assertThat(overview.headline?.celsius).isEqualTo(42.0)
     }
 
     @Test
@@ -620,5 +620,23 @@ class ServerRepositoryTest {
         assertThat(pickMainInterface(listOf("veth1", "eth0", "bond0"))).isEqualTo("bond0")
         assertThat(pickMainInterface(listOf("br-18191748cb07", "eth1"))).isEqualTo("eth1")
         assertThat(pickMainInterface(listOf("lo", "veth1", "tailscale1"))).isNull()
+    }
+
+    @Test
+    fun `getTemperatures converts Fahrenheit readings and limits to Celsius`() = runBlocking {
+        mockWebServer.enqueue(
+            MockResponse().setBody(
+                """{"data": {"metrics": {"temperature": {
+                    "summary": {"warningCount": 0, "criticalCount": 0},
+                    "sensors": [{"id": "cpu", "name": "cpu", "type": "CPU_PACKAGE",
+                        "current": {"value": 212, "unit": "FAHRENHEIT", "status": "NORMAL"}, "warning": 158, "critical": null}]
+                    }}}}"""
+            )
+        )
+
+        val sensor = (repository.getTemperatures() as WidgetResult.Success).data.sensors.single()
+
+        assertThat(sensor.celsius).isEqualTo(100.0)
+        assertThat(sensor.warningCelsius).isEqualTo(70.0)
     }
 }
