@@ -1,8 +1,6 @@
 package com.chilisaft.undroid.utils
 
 import android.content.Context
-import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKey
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.google.common.truth.Truth.assertThat
@@ -32,7 +30,6 @@ class PreferencesModuleTest {
         // commit() waits for any apply() still in flight, so the delete below can't be undone by a late write.
         context.getSharedPreferences(TEST_FILE, Context.MODE_PRIVATE).edit().clear().commit()
         context.deleteSharedPreferences(TEST_FILE)
-        context.deleteSharedPreferences(TEST_LEGACY_FILE)
         KeyStore.getInstance("AndroidKeyStore").apply { load(null) }.deleteEntry(TEST_ALIAS)
         PreferencesModule.provideDefaultSharedPreferences(context).edit().remove(TEST_DEFAULT_KEY).commit()
     }
@@ -66,24 +63,6 @@ class PreferencesModuleTest {
     }
 
     @Test
-    fun migration_movesValuesOutOfTheLegacyFileAndDeletesIt() {
-        EncryptedSharedPreferences.create(
-            TEST_LEGACY_FILE,
-            MasterKey.DEFAULT_MASTER_KEY_ALIAS,
-            context,
-            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-        ).edit().putString("api_token", "legacy-key").putString("serverUrl", "http://192.168.1.10").commit()
-
-        val store = testStore()
-        migrateLegacyEncryptedPreferences(context, TEST_LEGACY_FILE, store, Storage.SECURE_KEYS)
-
-        assertThat(store.getString("api_token")).isEqualTo("legacy-key")
-        assertThat(store.getString("serverUrl")).isEqualTo("http://192.168.1.10")
-        assertThat(File(context.applicationInfo.dataDir, "shared_prefs/$TEST_LEGACY_FILE.xml").exists()).isFalse()
-    }
-
-    @Test
     fun defaultPreferences_roundTripsAValue() {
         PreferencesModule.provideDefaultSharedPreferences(context).edit().putString(TEST_DEFAULT_KEY, "dark").commit()
 
@@ -92,7 +71,6 @@ class PreferencesModuleTest {
 
     private companion object {
         const val TEST_FILE = "secure_prefs_instrumented_test"
-        const val TEST_LEGACY_FILE = "encrypted_prefs_instrumented_test"
         const val TEST_ALIAS = "undroid_credentials_instrumented_test"
         const val TEST_DEFAULT_KEY = "instrumented_test_key"
     }

@@ -49,9 +49,6 @@ class Storage @Inject constructor(
         set(value) = preferences.edit() { putBoolean(KEY_USE_DYNAMIC_COLOR, value) }
 
     companion object {
-        /** The credentials kept in the [SecureStore] - what the legacy-file migration copies over. */
-        val SECURE_KEYS = listOf(KEY_API_TOKEN, KEY_SERVER_URL)
-
         private const val KEY_API_TOKEN = "api_token"
         private const val KEY_SERVER_URL = "serverUrl"
         private const val KEY_SERVER_NETWORK_CACHE = "server_network_cache"

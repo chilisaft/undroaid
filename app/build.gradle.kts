@@ -147,7 +147,6 @@ dependencies {
     testImplementation(libs.androidx.test.ext)
     testImplementation(libs.androidx.test.rules)
 
-    implementation(libs.androidx.security.crypto)
     implementation(libs.apollo.runtime)
 }
 

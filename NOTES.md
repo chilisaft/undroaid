@@ -48,7 +48,7 @@ Card containers were barely visible against their screen background - see below.
 
 - **Login** (`ui/login`) — server URL + API token, validated via `TestLoginQuery` (checks
   `info { os { hostname } }`, not the old fragile `server` field), stored in
-  `EncryptedSharedPreferences` via `Storage`. Auto-login on relaunch if credentials exist.
+  the Keystore-backed `SecureStore` via `Storage`. Auto-login on relaunch if credentials exist.
 - **"Where do I get an API key?" help section** (`LoginScreen.kt`'s `ApiKeyHelpSection`) - the
   login form itself was barebones with zero onboarding for first-time setup. Collapsed by
   default (a `Row` that toggles an `AnimatedVisibility` block, not a dedicated component - Compose
@@ -328,8 +328,9 @@ Card containers were barely visible against their screen background - see below.
   config can't express IP ranges.
 - **Credentials at rest**: `SecureStore` (AES-256-GCM, key in the Android Keystore under
   `undroid_credentials`, random IV per value) in `secure_prefs.xml`, excluded from backup/transfer.
-  Replaced the deprecated EncryptedSharedPreferences; the old file is migrated once and deleted
-  (see TODO.md #4 for removing the migration). `PreferencesModuleTest` uses its own alias/files and
+  Replaced the deprecated EncryptedSharedPreferences on 2026-10-25; the one-time migration out of
+  the old `encrypted_prefs` file and the `security-crypto` dependency were removed on 2026-10-29
+  (an install still on a pre-2026-10-25 build would have to log in again). `PreferencesModuleTest` uses its own alias/files and
   is now safe to run on a device with a real login. The Server screen's network cache (LAN IP)
   is stored there too and cleared on logout.
 - Login screen sets `FLAG_SECURE` (the key can be shown in plain text there). Links from servers
