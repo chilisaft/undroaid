@@ -12,6 +12,8 @@ import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import java.io.IOException
+import java.net.SocketTimeoutException
+import java.util.concurrent.TimeUnit
 
 class UnraidInterceptorTest {
 
@@ -133,5 +135,23 @@ class UnraidInterceptorTest {
         val recordedRequest = server.takeRequest()
         assertThat(recordedRequest.getHeader("X-API-KEY")).isEqualTo("override-token")
         assertThat(recordedRequest.getHeader("X-API-KEY-OVERRIDE")).isNull()
+    }
+
+    @Test
+    fun `X-Read-Timeout-Seconds raises the read timeout for that request only and is stripped`() {
+        every { storage.serverUrl } returns server.url("/").toString()
+        every { storage.apiToken } returns null
+        val shortTimeoutClient = client.newBuilder().readTimeout(300, TimeUnit.MILLISECONDS).build()
+
+        server.enqueue(MockResponse().setHeadersDelay(800, TimeUnit.MILLISECONDS))
+        val response = shortTimeoutClient.newCall(
+            Request.Builder().url(server.url("/graphql")).header("X-Read-Timeout-Seconds", "5").build()
+        ).execute()
+        assertThat(response.isSuccessful).isTrue()
+        assertThat(server.takeRequest().getHeader("X-Read-Timeout-Seconds")).isNull()
+
+        server.enqueue(MockResponse().setHeadersDelay(800, TimeUnit.MILLISECONDS))
+        val withoutHeader = runCatching { shortTimeoutClient.newCall(Request.Builder().url(server.url("/graphql")).build()).execute() }
+        assertThat(withoutHeader.exceptionOrNull()).isInstanceOf(SocketTimeoutException::class.java)
     }
 }

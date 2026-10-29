@@ -14,6 +14,7 @@ import io.mockk.verify
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
@@ -187,5 +188,74 @@ class DockerViewModelTest {
         assertThat(viewModel.uiState.value.logs?.result).isEqualTo(
             WidgetResult.Success(listOf(DockerLogLine("t", "hello"), DockerLogLine("t", "hello")))
         )
+    }
+
+    @Test
+    fun `check for updates reloads the list and reports how many were found`() {
+        val updatable = testContainer.copy(updateAvailable = true)
+        coEvery { repository.checkForUpdates() } returns WidgetResult.Success(Unit)
+        viewModel = DockerViewModel(repository, userMessages)
+        testDispatcher.scheduler.advanceUntilIdle()
+        coEvery { repository.getContainers() } returns WidgetResult.Success(listOf(updatable))
+
+        viewModel.checkForUpdates()
+        testDispatcher.scheduler.runCurrent()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.containers).isEqualTo(WidgetResult.Success(listOf(updatable)))
+        assertThat(viewModel.uiState.value.isCheckingForUpdates).isFalse()
+        verify { userMessages.show("1 update available") }
+    }
+
+    @Test
+    fun `a failed check is reported and leaves the list alone`() {
+        val failure = WidgetResult.Failure(permissionDenied = true, message = null)
+        coEvery { repository.checkForUpdates() } returns failure
+        viewModel = DockerViewModel(repository, userMessages)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.checkForUpdates()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        verify { userMessages.showFailure("check for updates", failure) }
+        coVerify(exactly = 1) { repository.getContainers() }
+    }
+
+    @Test
+    fun `update shows a spinner while it runs, then reloads the list - the container comes back with a new id`() {
+        val updated = testContainer.copy(id = "c1-new", updateAvailable = false)
+        coEvery { repository.updateContainer("c1") } coAnswers {
+            delay(5_000)
+            WidgetResult.Success(Unit)
+        }
+        viewModel = DockerViewModel(repository, userMessages)
+        testDispatcher.scheduler.advanceUntilIdle()
+        coEvery { repository.getContainers() } returns WidgetResult.Success(listOf(updated))
+
+        viewModel.update("c1")
+        testDispatcher.scheduler.runCurrent()
+        assertThat(viewModel.uiState.value.actioningIds).containsExactly("c1")
+
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertThat(viewModel.uiState.value.actioningIds).isEmpty()
+        assertThat(viewModel.uiState.value.containers).isEqualTo(WidgetResult.Success(listOf(updated)))
+        verify { userMessages.show("Updated plex") }
+    }
+
+    @Test
+    fun `update all sends exactly the confirmed ids and reports a failure by count`() {
+        val second = testContainer.copy(id = "c2", name = "sonarr")
+        coEvery { repository.getContainers() } returns WidgetResult.Success(listOf(testContainer, second))
+        val failure = WidgetResult.Failure(permissionDenied = false, message = "timeout")
+        coEvery { repository.updateContainers(listOf("c1", "c2")) } returns failure
+        viewModel = DockerViewModel(repository, userMessages)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.updateAll(listOf("c1", "c2"))
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        coVerify(exactly = 1) { repository.updateContainers(listOf("c1", "c2")) }
+        verify { userMessages.showFailure("update 2 containers", failure) }
+        assertThat(viewModel.uiState.value.actioningIds).isEmpty()
     }
 }

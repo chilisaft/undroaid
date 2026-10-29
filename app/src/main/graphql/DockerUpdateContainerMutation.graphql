@@ -1,0 +1,7 @@
+mutation DockerUpdateContainerMutation($id: PrefixedID!) {
+    docker {
+        updateContainer(id: $id) {
+            id
+        }
+    }
+}

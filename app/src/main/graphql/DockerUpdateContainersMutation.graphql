@@ -1,0 +1,9 @@
+# "Update all" sends the ids the user confirmed rather than calling updateAllContainers, so a
+# container that gained an update after the list was shown is never recreated unseen.
+mutation DockerUpdateContainersMutation($ids: [PrefixedID!]!) {
+    docker {
+        updateContainers(ids: $ids) {
+            id
+        }
+    }
+}

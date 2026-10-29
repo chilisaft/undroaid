@@ -30,6 +30,8 @@ data class DockerScreenState(
     val containers: WidgetResult<List<DockerContainer>> = WidgetResult.Loading,
     val actioningIds: Set<String> = emptySet(),
     val logs: DockerLogsState? = null,
+    /** "Check for updates" is running (it takes several seconds on a real server). */
+    val isCheckingForUpdates: Boolean = false,
     /** A [DockerViewModel.refresh] is running - drives the pull-to-refresh indicator, while the list keeps showing its current data. */
     val isRefreshing: Boolean = false
 )
@@ -89,6 +91,55 @@ class DockerViewModel @Inject constructor(
     fun unpause(id: String) = runAction(id, "resume", DockerContainerState.RUNNING) { dockerRepository.unpauseContainer(id) }
 
     fun restart(id: String) = runAction(id, "restart", DockerContainerState.RUNNING) { dockerRepository.restartContainer(id) }
+
+    /** Asks the registries for new images, then reloads the list with the fresh update flags. */
+    fun checkForUpdates() {
+        if (_uiState.value.isCheckingForUpdates) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isCheckingForUpdates = true) }
+            when (val result = dockerRepository.checkForUpdates()) {
+                is WidgetResult.Success -> {
+                    val containers = dockerRepository.getContainers()
+                    _uiState.update { it.copy(containers = containers) }
+                    if (containers is WidgetResult.Success) {
+                        val count = containers.data.count { it.updateAvailable }
+                        userMessages.show(if (count == 0) "No updates available" else "$count ${if (count == 1) "update" else "updates"} available")
+                    }
+                }
+                is WidgetResult.Failure -> userMessages.showFailure("check for updates", result)
+                WidgetResult.Loading -> Unit
+            }
+            _uiState.update { it.copy(isCheckingForUpdates = false) }
+        }
+    }
+
+    fun update(id: String) = runUpdate(listOf(id)) { dockerRepository.updateContainer(id) }
+
+    /** Updates exactly [ids] - the containers the user saw and confirmed, not whatever has an update by now. */
+    fun updateAll(ids: List<String>) = runUpdate(ids) { dockerRepository.updateContainers(ids) }
+
+    /**
+     * Updating recreates each container, which gives it a new id - so instead of polling for the
+     * old id's state like [runAction], it reloads the list once the server reports it's done.
+     */
+    private fun runUpdate(ids: List<String>, action: suspend () -> WidgetResult<Unit>) {
+        if (ids.isEmpty() || ids.any { it in _uiState.value.actioningIds }) return
+        val names = ids.map { containerName(it) }
+        viewModelScope.launch {
+            _uiState.update { it.copy(actioningIds = it.actioningIds + ids) }
+            val result = action()
+            val containers = dockerRepository.getContainers()
+            _uiState.update { state ->
+                state.copy(containers = if (containers is WidgetResult.Success) containers else state.containers, actioningIds = state.actioningIds - ids.toSet())
+            }
+            val what = names.singleOrNull() ?: "${names.size} containers"
+            when (result) {
+                is WidgetResult.Success -> userMessages.show("Updated $what")
+                is WidgetResult.Failure -> userMessages.showFailure("update $what", result)
+                WidgetResult.Loading -> Unit
+            }
+        }
+    }
 
     /**
      * The mutation resolving doesn't mean the daemon has actually finished the transition yet

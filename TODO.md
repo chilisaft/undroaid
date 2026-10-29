@@ -83,6 +83,23 @@ Possible follow-ups:
 
 ---
 
+## 4. Docker container updates - built 2026-10-29
+
+Docker tab: an updates card at the top ("N updates available", the names, "Check" / "Check
+again", "Update all"), an UPDATE tag on each updatable row, and an "Update" action in its sheet.
+Both kinds of update ask first; the "Update all" dialog lists the containers with their icons, and
+only those confirmed ids are sent (`updateContainers(ids)`, not `updateAllContainers`).
+
+Checked against a real server (Unraid 7.3.4, API 4.37.9):
+- `isUpdateAvailable` is the flag used. It is null for containers Unraid doesn't manage as
+  templates (Nextcloud AIO helpers, redis/postgres sidecars) - treated as "no update".
+- `containerUpdateStatuses` disagreed with it (UNKNOWN for containers that had updates) - unused.
+- `refreshDockerDigests` ("Check") took 8.5 s, so it only runs when the user taps Check.
+- Updating recreates the container with a new id, so the list reloads after every update.
+- Updates worked end to end on the user's server.
+
+---
+
 ## Blocked by the Unraid API (not buildable client-side yet)
 
 These were requested but the API has no way to do them. Don't add disabled placeholder buttons -

@@ -140,6 +140,13 @@ Card containers were barely visible against their screen background - see below.
   stdout from stderr or classify severity - a keyword-based coloring heuristic was tried and
   reverted (see Session update above). Pull-to-refresh on the container list
   (`isRefreshing = uiState.containers is WidgetResult.Loading`, calls the existing `onRetry`).
+  **Updates** (2026-10-29, see TODO.md section 4): `isUpdateAvailable` drives an updates card,
+  row tags and a sheet action; `refreshDockerDigests` is the manual "Check". Long-running calls
+  raise OkHttp's 10 s read timeout per request via the `X-Read-Timeout-Seconds` header
+  (`UnraidInterceptor.READ_TIMEOUT_HEADER`, applied with `chain.withReadTimeout` and stripped before
+  sending; `runWidgetMutation(readTimeoutSeconds = ...)`): 60 s for the check, 30 min for updates.
+  `ConfirmActionDialog` gained an optional `content` slot (body in `ConfirmDialogBody`, which
+  previews use since Android Studio's static preview can't draw a dialog window).
 - **VMs** (`ui/vms`, route `"vms"`) — built out later this session, deliberately mirroring the
   Docker tab's shape (`VmRepository`/`VmsViewModel`/`VmsScreen` are near-identical structurally to
   their Docker counterparts). Backed by `VmsQuery` (`vms.domains { id name state }`) and one

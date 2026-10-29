@@ -38,8 +38,8 @@ class DockerRepositoryTest {
           "data": {
             "docker": {
               "containers": [
-                { "id": "c1", "names": ["/plex"], "image": "plexinc/pms-docker:latest", "state": "RUNNING", "status": "Up 3 hours", "iconUrl": "https://example.com/plex.png", "webUiUrl": "http://tower:32400/web" },
-                { "id": "c2", "names": ["/sonarr"], "image": "linuxserver/sonarr:latest", "state": "EXITED", "status": "Exited (0) 2 days ago", "iconUrl": null, "webUiUrl": null }
+                { "id": "c1", "names": ["/plex"], "image": "plexinc/pms-docker:latest", "state": "RUNNING", "status": "Up 3 hours", "iconUrl": "https://example.com/plex.png", "webUiUrl": "http://tower:32400/web", "isUpdateAvailable": true },
+                { "id": "c2", "names": ["/sonarr"], "image": "linuxserver/sonarr:latest", "state": "EXITED", "status": "Exited (0) 2 days ago", "iconUrl": null, "webUiUrl": null, "isUpdateAvailable": null }
               ]
             }
           }
@@ -60,6 +60,9 @@ class DockerRepositoryTest {
         assertThat(containers[1].state).isEqualTo(DockerContainerState.EXITED)
         assertThat(containers[1].iconUrl).isNull()
         assertThat(containers[1].webUiUrl).isNull()
+        assertThat(containers[0].updateAvailable).isTrue()
+        // Null (Unraid doesn't track this container) is reported like false: nothing to offer.
+        assertThat(containers[1].updateAvailable).isFalse()
     }
 
     @Test
@@ -122,6 +125,43 @@ class DockerRepositoryTest {
         mockWebServer.enqueue(MockResponse().setBody("""{"errors": [{"message": "Forbidden", "extensions": {"code": "FORBIDDEN"}}]}"""))
 
         val result = repository.startContainer("c1") as WidgetResult.Failure
+
+        assertThat(result.permissionDenied).isTrue()
+    }
+
+    @Test
+    fun `checkForUpdates runs the digest refresh`() = runBlocking {
+        mockWebServer.enqueue(MockResponse().setBody("""{"data": {"refreshDockerDigests": true}}"""))
+
+        assertThat(repository.checkForUpdates()).isEqualTo(WidgetResult.Success(Unit))
+        assertThat(mockWebServer.takeRequest().body.readUtf8()).contains("refreshDockerDigests")
+    }
+
+    @Test
+    fun `updateContainer sends the id and asks for a long read timeout`() = runBlocking {
+        mockWebServer.enqueue(MockResponse().setBody("""{"data": {"docker": {"updateContainer": {"id": "c9"}}}}"""))
+
+        assertThat(repository.updateContainer("c1")).isEqualTo(WidgetResult.Success(Unit))
+        val request = mockWebServer.takeRequest()
+        assertThat(request.body.readUtf8()).contains("\"id\":\"c1\"")
+        // Without UnraidInterceptor in this test client the header reaches the server - it's what
+        // the interceptor turns into a per-request timeout.
+        assertThat(request.getHeader("X-Read-Timeout-Seconds")).isEqualTo("1800")
+    }
+
+    @Test
+    fun `updateContainers sends exactly the given ids`() = runBlocking {
+        mockWebServer.enqueue(MockResponse().setBody("""{"data": {"docker": {"updateContainers": [{"id": "n1"}, {"id": "n2"}]}}}"""))
+
+        assertThat(repository.updateContainers(listOf("c1", "c2"))).isEqualTo(WidgetResult.Success(Unit))
+        assertThat(mockWebServer.takeRequest().body.readUtf8()).contains("\"ids\":[\"c1\",\"c2\"]")
+    }
+
+    @Test
+    fun `updateContainer reports a missing UPDATE permission as permission denied`() = runBlocking {
+        mockWebServer.enqueue(MockResponse().setBody("""{"errors": [{"message": "Forbidden", "extensions": {"code": "FORBIDDEN"}}]}"""))
+
+        val result = repository.updateContainer("c1") as WidgetResult.Failure
 
         assertThat(result.permissionDenied).isTrue()
     }

@@ -7,7 +7,13 @@ data class DockerContainer(
     val state: DockerContainerState,
     val statusText: String,
     val iconUrl: String?,
-    val webUiUrl: String?
+    val webUiUrl: String?,
+    /**
+     * Only true when Unraid knows a newer image exists. False also covers "unknown" - on a real
+     * server `isUpdateAvailable` was null for containers Unraid doesn't manage (e.g. Nextcloud
+     * AIO's helpers, compose sidecars), and those can't be offered an update either way.
+     */
+    val updateAvailable: Boolean = false
 )
 
 enum class DockerContainerState {

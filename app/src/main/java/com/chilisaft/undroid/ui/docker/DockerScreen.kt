@@ -15,6 +15,7 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.SystemUpdateAlt
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
@@ -39,6 +40,9 @@ import com.chilisaft.undroid.data.models.DockerContainer
 import com.chilisaft.undroid.data.models.DockerContainerState
 import com.chilisaft.undroid.data.models.DockerLogLine
 import com.chilisaft.undroid.data.models.WidgetResult
+import com.chilisaft.undroid.ui.components.AppCard
+import com.chilisaft.undroid.ui.components.ConfirmActionDialog
+import com.chilisaft.undroid.ui.components.ConfirmDialogBody
 import com.chilisaft.undroid.ui.components.ContainerIconBadge
 import com.chilisaft.undroid.ui.components.ActionSheet
 import com.chilisaft.undroid.ui.components.ActionSheetItem
@@ -69,6 +73,9 @@ fun DockerScreen(viewModel: DockerViewModel = hiltViewModel(), topBarActions: @C
         onPause = viewModel::pause,
         onUnpause = viewModel::unpause,
         onRestart = viewModel::restart,
+        onCheckForUpdates = viewModel::checkForUpdates,
+        onUpdate = viewModel::update,
+        onUpdateAll = viewModel::updateAll,
         onViewLogs = viewModel::openLogs,
         onRetryLogs = viewModel::retryLogs,
         onCloseLogs = viewModel::closeLogs,
@@ -87,6 +94,9 @@ fun DockerScreenContent(
     onPause: (String) -> Unit = {},
     onUnpause: (String) -> Unit = {},
     onRestart: (String) -> Unit = {},
+    onCheckForUpdates: () -> Unit = {},
+    onUpdate: (String) -> Unit = {},
+    onUpdateAll: (List<String>) -> Unit = {},
     onViewLogs: (String, String) -> Unit = { _, _ -> },
     onRetryLogs: () -> Unit = {},
     onCloseLogs: () -> Unit = {},
@@ -94,6 +104,8 @@ fun DockerScreenContent(
 ) {
     val spacing = MaterialTheme.spacing
     var selectedContainer by remember { mutableStateOf<DockerContainer?>(null) }
+    var confirmUpdate by remember { mutableStateOf<DockerContainer?>(null) }
+    var confirmUpdateAll by remember { mutableStateOf<List<DockerContainer>?>(null) }
 
     Scaffold(
         topBar = { TabTopBar(title = "Docker", icon = Icons.Filled.Layers, actions = topBarActions) }
@@ -111,6 +123,15 @@ fun DockerScreenContent(
                     EmptyState("No containers found")
                 } else {
                     ScreenList {
+                        item {
+                            UpdatesCard(
+                                updates = containers.filter { it.updateAvailable },
+                                isChecking = uiState.isCheckingForUpdates,
+                                isUpdating = containers.any { it.updateAvailable && it.id in uiState.actioningIds },
+                                onCheck = onCheckForUpdates,
+                                onUpdateAll = { confirmUpdateAll = it }
+                            )
+                        }
                         items(containers, key = { it.id }) { container ->
                             ResourceRowCard(
                                 title = container.name,
@@ -118,6 +139,7 @@ fun DockerScreenContent(
                                 statusText = container.statusText,
                                 isActioning = container.id in uiState.actioningIds,
                                 onClick = { selectedContainer = container },
+                                tag = if (container.updateAvailable) "Update" else null,
                                 leading = { size ->
                                     ContainerIconBadge(container.iconUrl, isRunning = container.state == DockerContainerState.RUNNING, size = size)
                                 }
@@ -139,9 +161,32 @@ fun DockerScreenContent(
             onPause = { onPause(container.id); selectedContainer = null },
             onUnpause = { onUnpause(container.id); selectedContainer = null },
             onRestart = { onRestart(container.id); selectedContainer = null },
+            onUpdate = { confirmUpdate = container; selectedContainer = null },
             onViewLogs = { onViewLogs(container.id, container.name); selectedContainer = null },
             onOpenUrlFailed = onOpenUrlFailed
         )
+    }
+
+    confirmUpdate?.let { target ->
+        ConfirmActionDialog(
+            title = "Update ${target.name}?",
+            text = "Pulls the latest image and recreates the container. It's unavailable while that happens.",
+            confirmLabel = "Update",
+            onConfirm = { onUpdate(target.id); confirmUpdate = null },
+            onDismiss = { confirmUpdate = null }
+        )
+    }
+
+    confirmUpdateAll?.let { targets ->
+        ConfirmActionDialog(
+            title = "Update ${targets.size} ${if (targets.size == 1) "container" else "containers"}?",
+            text = "Pulls the latest images and recreates these containers. Each is unavailable while it's updated.",
+            confirmLabel = "Update all",
+            onConfirm = { onUpdateAll(targets.map { it.id }); confirmUpdateAll = null },
+            onDismiss = { confirmUpdateAll = null }
+        ) {
+            ContainerNameList(targets)
+        }
     }
 
     val logs = uiState.logs
@@ -159,6 +204,7 @@ private fun ContainerActionSheet(
     onPause: () -> Unit,
     onUnpause: () -> Unit,
     onRestart: () -> Unit,
+    onUpdate: () -> Unit,
     onViewLogs: () -> Unit,
     onOpenUrlFailed: (String) -> Unit
 ) {
@@ -192,12 +238,88 @@ private fun ContainerActionSheet(
                 ActionSheetItem(Icons.Filled.PlayArrow, "Start", onStart)
             }
         }
+        if (container.updateAvailable) {
+            ActionSheetItem(Icons.Filled.SystemUpdateAlt, "Update", onUpdate)
+        }
         ActionSheetItem(Icons.AutoMirrored.Filled.Article, "View Logs", onViewLogs)
         if (!container.webUiUrl.isNullOrBlank()) {
             ActionSheetItem(Icons.AutoMirrored.Filled.OpenInNew, "Open Web UI", {
                 if (!uriHandler.tryOpenUri(container.webUiUrl)) onOpenUrlFailed(container.webUiUrl)
                 onDismiss()
             })
+        }
+    }
+}
+
+/**
+ * The top of the Docker list: what Unraid reports as updatable, with "Update all", and a manual
+ * "Check for updates" (the registries are only asked when the user taps it - it takes seconds).
+ */
+@Composable
+private fun UpdatesCard(
+    updates: List<DockerContainer>,
+    isChecking: Boolean,
+    isUpdating: Boolean,
+    onCheck: () -> Unit,
+    onUpdateAll: (List<DockerContainer>) -> Unit
+) {
+    val spacing = MaterialTheme.spacing
+    AppCard {
+        Column(modifier = Modifier.padding(spacing.medium), verticalArrangement = Arrangement.spacedBy(spacing.small)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Filled.SystemUpdateAlt,
+                    contentDescription = null,
+                    tint = if (updates.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(Modifier.width(spacing.small))
+                Text(
+                    when {
+                        isChecking -> "Checking for updates…"
+                        updates.isEmpty() -> "No updates available"
+                        else -> "${updates.size} ${if (updates.size == 1) "update" else "updates"} available"
+                    },
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.weight(1f)
+                )
+                if (isChecking) {
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                } else {
+                    TextButton(onClick = onCheck, enabled = !isUpdating) { Text(if (updates.isEmpty()) "Check" else "Check again") }
+                }
+            }
+            if (updates.isNotEmpty()) {
+                Text(
+                    updates.joinToString { it.name },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Button(onClick = { onUpdateAll(updates) }, enabled = !isUpdating && !isChecking, modifier = Modifier.fillMaxWidth()) {
+                    Text(if (isUpdating) "Updating…" else "Update all")
+                }
+            }
+        }
+    }
+}
+
+/** Icon + name per container, for dialogs that act on several at once. */
+@Composable
+private fun ContainerNameList(containers: List<DockerContainer>) {
+    val spacing = MaterialTheme.spacing
+    Column(verticalArrangement = Arrangement.spacedBy(spacing.small)) {
+        containers.forEach { container ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                ContainerIconBadge(container.iconUrl, isRunning = container.state == DockerContainerState.RUNNING)
+                Spacer(Modifier.width(spacing.small))
+                Text(
+                    container.name,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
     }
 }
@@ -280,7 +402,7 @@ private fun LogLines(lines: List<DockerLogLine>) {
 }
 
 private val previewContainers = listOf(
-    DockerContainer(id = "1", name = "plex", image = "plexinc/pms-docker:latest", state = DockerContainerState.RUNNING, statusText = "Up 3 hours", iconUrl = null, webUiUrl = "http://tower:32400/web"),
+    DockerContainer(id = "1", name = "plex", image = "plexinc/pms-docker:latest", state = DockerContainerState.RUNNING, statusText = "Up 3 hours", iconUrl = null, webUiUrl = "http://tower:32400/web", updateAvailable = true),
     DockerContainer(id = "2", name = "sonarr", image = "linuxserver/sonarr:latest", state = DockerContainerState.EXITED, statusText = "Exited (0) 2 days ago", iconUrl = null, webUiUrl = null),
     DockerContainer(id = "3", name = "qbittorrent", image = "linuxserver/qbittorrent:latest", state = DockerContainerState.PAUSED, statusText = "Paused", iconUrl = null, webUiUrl = "http://tower:8080")
 )
@@ -299,5 +421,26 @@ fun DockerScreenPreview() {
 fun DockerScreenEmptyPreview() {
     AppTheme {
         DockerScreenContent(uiState = DockerScreenState(containers = WidgetResult.Success(emptyList())))
+    }
+}
+
+// The static preview can't draw a dialog window, so this shows the dialog's body on a dialog-styled surface.
+@Preview(name = "Update all dialog", showBackground = true)
+@Preview(name = "Update all dialog (dark)", showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+fun DockerUpdateAllDialogPreview() {
+    AppTheme {
+        Surface(shape = AlertDialogDefaults.shape, color = AlertDialogDefaults.containerColor, modifier = Modifier.padding(16.dp)) {
+            Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Text("Update ${previewContainers.size} containers?", style = MaterialTheme.typography.headlineSmall)
+                ConfirmDialogBody("Pulls the latest images and recreates these containers. Each is unavailable while it's updated.") {
+                    ContainerNameList(previewContainers)
+                }
+                Row(modifier = Modifier.align(Alignment.End)) {
+                    TextButton(onClick = {}) { Text("Cancel") }
+                    TextButton(onClick = {}) { Text("Update all") }
+                }
+            }
+        }
     }
 }

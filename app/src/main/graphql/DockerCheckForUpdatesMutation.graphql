@@ -1,0 +1,5 @@
+# The webUI's "Check for updates": asks the image registries for the latest digests. Changes no
+# container. Took ~8.5 s for 32 containers on a real server, so it runs with a longer timeout.
+mutation DockerCheckForUpdatesMutation {
+    refreshDockerDigests
+}

@@ -46,7 +46,8 @@ private fun ResourceItemSize.titleStyle(): TextStyle = when (this) {
 }
 
 /**
- * A container/VM row's content: icon badge, name, optional [subtitle], and a [StatusLine] - no
+ * A container/VM row's content: icon badge, name (with an optional [tag] chip, e.g. "Update"),
+ * optional [subtitle], and a [StatusLine] - no
  * surface of its own, so it can sit in a list card ([ResourceRowCard]), a sheet header
  * ([ResourceHeaderCard]), or directly inside a larger card (the Dashboard previews).
  * [leading] receives the badge size matching [size].
@@ -60,6 +61,7 @@ fun ResourceListItem(
     modifier: Modifier = Modifier,
     size: ResourceItemSize = ResourceItemSize.Regular,
     subtitle: String? = null,
+    tag: String? = null,
     trailing: (@Composable () -> Unit)? = null
 ) {
     val spacing = MaterialTheme.spacing
@@ -67,7 +69,13 @@ fun ResourceListItem(
         leading(size.badgeSize)
         Spacer(Modifier.width(spacing.medium))
         Column(modifier = Modifier.weight(1f)) {
-            Text(title, style = size.titleStyle(), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(title, style = size.titleStyle(), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                if (tag != null) {
+                    Spacer(Modifier.width(spacing.small))
+                    TagChip(tag)
+                }
+            }
             if (subtitle != null) {
                 Text(
                     subtitle,
@@ -99,7 +107,8 @@ fun ResourceRowCard(
     statusText: String,
     isActioning: Boolean,
     onClick: () -> Unit,
-    leading: @Composable (badgeSize: Dp) -> Unit
+    leading: @Composable (badgeSize: Dp) -> Unit,
+    tag: String? = null
 ) {
     AppCard(onClick = onClick, enabled = !isActioning) {
         ResourceListItem(
@@ -107,6 +116,7 @@ fun ResourceRowCard(
             tone = tone,
             statusText = statusText,
             leading = leading,
+            tag = tag,
             modifier = Modifier.padding(MaterialTheme.spacing.medium),
             trailing = {
                 if (isActioning) {

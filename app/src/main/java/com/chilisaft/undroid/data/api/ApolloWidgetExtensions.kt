@@ -21,9 +21,20 @@ suspend fun <D : Query.Data, T> ApolloClient.runWidgetQuery(query: Query<D>, map
     WidgetResult.Failure(permissionDenied = e is ApolloHttpException && e.statusCode == 403, message = e.toUserMessage())
 }
 
-/** Mutation counterpart to [runWidgetQuery]. */
-suspend fun <D : Mutation.Data, T> ApolloClient.runWidgetMutation(mutation: Mutation<D>, map: (D) -> T): WidgetResult<T> = try {
-    this.mutation(mutation).execute().toWidgetResult(map)
+/**
+ * Mutation counterpart to [runWidgetQuery]. [readTimeoutSeconds] raises the read timeout for
+ * this one call (see [UnraidInterceptor.READ_TIMEOUT_HEADER]) - for mutations the server takes
+ * longer than the default 10 s to answer.
+ */
+suspend fun <D : Mutation.Data, T> ApolloClient.runWidgetMutation(
+    mutation: Mutation<D>,
+    readTimeoutSeconds: Int? = null,
+    map: (D) -> T
+): WidgetResult<T> = try {
+    this.mutation(mutation)
+        .apply { if (readTimeoutSeconds != null) addHttpHeader(UnraidInterceptor.READ_TIMEOUT_HEADER, readTimeoutSeconds.toString()) }
+        .execute()
+        .toWidgetResult(map)
 } catch (e: ApolloException) {
     WidgetResult.Failure(permissionDenied = e is ApolloHttpException && e.statusCode == 403, message = e.toUserMessage())
 }

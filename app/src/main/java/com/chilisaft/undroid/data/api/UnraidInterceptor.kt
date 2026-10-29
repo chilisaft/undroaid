@@ -5,6 +5,7 @@ import com.chilisaft.undroid.utils.sanitizeUnraidUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.Response
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -34,6 +35,17 @@ class UnraidInterceptor @Inject constructor(private val storage: Storage) : Inte
             builder.header("X-API-KEY", finalToken)
         }
 
-        return chain.proceed(builder.build())
+        // 3. A longer read timeout for operations the server takes minutes to answer (pulling
+        // container images) - everything else keeps OkHttp's 10 s default.
+        val readTimeoutSeconds = originalRequest.header(READ_TIMEOUT_HEADER)?.toIntOrNull()
+        builder.removeHeader(READ_TIMEOUT_HEADER)
+        val timedChain = if (readTimeoutSeconds != null) chain.withReadTimeout(readTimeoutSeconds, TimeUnit.SECONDS) else chain
+
+        return timedChain.proceed(builder.build())
+    }
+
+    companion object {
+        /** Set on a request (in seconds) to raise its read timeout; stripped before it's sent. */
+        const val READ_TIMEOUT_HEADER = "X-Read-Timeout-Seconds"
     }
 }
