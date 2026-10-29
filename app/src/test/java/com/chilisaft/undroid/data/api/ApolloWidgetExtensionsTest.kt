@@ -33,7 +33,7 @@ class ApolloWidgetExtensionsTest {
     fun `a mapper that throws on an unexpected response becomes a Failure instead of crashing`() = runBlocking {
         mockWebServer.enqueue(MockResponse().setBody("""{"data": {"vms": {"domains": []}}}"""))
 
-        val result = apolloClient.runWidgetQuery(VmsQuery()) { data -> data.vms.domains!!.first() }
+        val result = apolloClient.runWidgetQuery(VmsQuery()) { data -> data.vms!!.domains!!.first() }
 
         assertThat(result).isInstanceOf(WidgetResult.Failure::class.java)
         assertThat((result as WidgetResult.Failure).permissionDenied).isFalse()
@@ -43,8 +43,25 @@ class ApolloWidgetExtensionsTest {
     fun `a mapper that succeeds still yields Success`() = runBlocking {
         mockWebServer.enqueue(MockResponse().setBody("""{"data": {"vms": {"domains": []}}}"""))
 
-        val result = apolloClient.runWidgetQuery(VmsQuery()) { data -> data.vms.domains.orEmpty().size }
+        val result = apolloClient.runWidgetQuery(VmsQuery()) { data -> data.vms!!.domains.orEmpty().size }
 
         assertThat(result).isEqualTo(WidgetResult.Success(0))
+    }
+
+    // What Unraid 7.3.4 sends when the key lacks VMS: the non-null `vms` field comes back null
+    // (instead of `data: null`), which Apollo can't parse.
+    @Test
+    fun `a forbidden field returned as null in non-null position is a permission failure`() = runBlocking {
+        mockWebServer.enqueue(
+            MockResponse().setBody(
+                """{"errors":[{"message":"Forbidden resource","locations":[{"line":1,"column":3}],"path":["vms"],""" +
+                    """"extensions":{"code":"FORBIDDEN","originalError":{"message":"Forbidden resource","error":"Forbidden","statusCode":403}}}],""" +
+                    """"data":{"vms":null}}"""
+            )
+        )
+
+        val result = apolloClient.runWidgetQuery(VmsQuery()) { data -> data.vms!!.domains.orEmpty().size }
+
+        assertThat(result).isEqualTo(WidgetResult.Failure(permissionDenied = true, message = "Forbidden resource"))
     }
 }

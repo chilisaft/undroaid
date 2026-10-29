@@ -75,6 +75,20 @@ class DockerRepositoryTest {
     }
 
     @Test
+    fun `getContainers reports permission denied when the server returns docker as null`() = runBlocking {
+        // Unraid 7.3.4's actual answer for a key without DOCKER - `docker` is null although non-null in its schema.
+        mockWebServer.enqueue(
+            MockResponse().setBody(
+                """{"errors":[{"message":"Forbidden resource","path":["docker"],"extensions":{"code":"FORBIDDEN"}}],"data":{"docker":null}}"""
+            )
+        )
+
+        val result = repository.getContainers()
+
+        assertThat(result).isEqualTo(WidgetResult.Failure(permissionDenied = true, message = "Forbidden resource"))
+    }
+
+    @Test
     fun `startContainer sends the given id and succeeds when the mutation returns no errors`() = runBlocking {
         mockWebServer.enqueue(MockResponse().setBody("""{"data": {"docker": {"start": {"id": "c1"}}}}"""))
 

@@ -26,7 +26,7 @@ class DockerRepository @Inject constructor(
 ) {
 
     suspend fun getContainers(): WidgetResult<List<DockerContainer>> =
-        apolloClient.runWidgetQuery(DockerContainersQuery()) { data -> data.docker.containers.map { it.toDockerContainer() } }
+        apolloClient.runWidgetQuery(DockerContainersQuery()) { data -> data.docker!!.containers.map { it.toDockerContainer() } }
 
     suspend fun startContainer(id: String): WidgetResult<Unit> =
         apolloClient.runWidgetMutation(DockerStartContainerMutation(id)) { }
@@ -66,7 +66,7 @@ class DockerRepository @Inject constructor(
                 tail = tail?.let { Optional.Present(it) } ?: Optional.Absent,
                 since = since?.let { Optional.Present(it) } ?: Optional.Absent
             )
-        ) { data -> data.docker.logs.toDockerLogsPage() }
+        ) { data -> data.docker!!.logs.toDockerLogsPage() }
 
     private fun DockerContainerLogsQuery.Logs.toDockerLogsPage() = DockerLogsPage(
         lines = lines.map { DockerLogLine(timestamp = it.timestamp, message = it.message) },

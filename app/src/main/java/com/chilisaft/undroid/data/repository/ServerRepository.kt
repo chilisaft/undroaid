@@ -125,7 +125,7 @@ class ServerRepository @Inject constructor(
         }
 
     suspend fun getDockerContainers(): WidgetResult<List<DockerContainerSummary>> =
-        apolloClient.runWidgetQuery(DockerStatusQuery()) { data -> data.docker.containers.map { it.toDockerContainerSummary() } }
+        apolloClient.runWidgetQuery(DockerStatusQuery()) { data -> data.docker!!.containers.map { it.toDockerContainerSummary() } }
 
     /**
      * Live CPU/memory load, polled at [intervalMillis] rather than pushed over a GraphQL

@@ -22,7 +22,7 @@ class VmRepository @Inject constructor(
 ) {
 
     suspend fun getVms(): WidgetResult<List<VmDomain>> =
-        apolloClient.runWidgetQuery(VmsQuery()) { data -> data.vms.domains.orEmpty().map { it.toVmDomain() } }
+        apolloClient.runWidgetQuery(VmsQuery()) { data -> data.vms!!.domains.orEmpty().map { it.toVmDomain() } }
 
     suspend fun startVm(id: String): WidgetResult<Unit> =
         apolloClient.runWidgetMutation(VmStartMutation(id)) { }

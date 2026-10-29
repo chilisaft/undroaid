@@ -451,6 +451,14 @@ key). What that settled:
   the needed permission gets `extensions.code = "FORBIDDEN"` ("Forbidden resource",
   `originalError.statusCode` 403) on the field, which the code check catches. Tested with a key that
   has no permissions at all (`me` still resolves for it: role `GUEST`, empty `permissions`).
+- **`docker` and `vms` come back as `null` without the permission** - `"data": {"docker": null}`
+  although the server's schema says `Docker!`/`Vms!` (other sections send a valid `"data": null`).
+  Apollo can't parse that (`JsonDataException: Expected BEGIN_OBJECT but was NULL at path
+  data.vms`) and drops the errors, so the tabs showed "Unknown error". Our `schema.graphqls` marks
+  both fields nullable (commented in place) - **keep that edit when refreshing the schema**; the
+  regression tests in `ApolloWidgetExtensionsTest`/`DockerRepositoryTest` fail if it's lost.
+  Mutations without the permission get a clean FORBIDDEN with `"data": null`, shown as "Couldn't
+  ...: your API key doesn't have permission" for every action.
 - **Notification bell badge** (`DisposableEffect` in `NotificationsScreen`) confirmed by the user:
   it updates after dismissing a notification and leaving with the system back gesture.
 - **WebSocket subscriptions were tried and abandoned** for CPU/memory - `ApolloClient`'s

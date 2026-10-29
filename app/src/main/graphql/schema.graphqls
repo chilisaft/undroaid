@@ -3353,7 +3353,10 @@ type Query {
   vars: Vars!
 
   "\n#### Required Permissions:\n\n- Action: **READ_ANY**\n- Resource: **VMS**\n\n#### Description:\n\nGet information about all VMs on the system"
-  vms: Vms!
+  # Undroid edit: nullable here although the server's schema says `Vms!`/`Docker!` - without the
+  # permission the server answers `"data": {"vms": null}` (not `"data": null`), which Apollo can't
+  # parse, losing the FORBIDDEN error. Keep this when refreshing the schema (see NOTES.md).
+  vms: Vms
 
   "\n#### Required Permissions:\n\n- Action: **READ_ANY**\n- Resource: **ARRAY**"
   parityHistory: [ParityCheck!]!
@@ -3375,7 +3378,10 @@ type Query {
   networkInterfaces: [InfoNetworkInterface!]!
 
   "\n#### Required Permissions:\n\n- Action: **READ_ANY**\n- Resource: **DOCKER**"
-  docker: Docker!
+  # Undroid edit: nullable here although the server's schema says `Vms!`/`Docker!` - without the
+  # permission the server answers `"data": {"vms": null}` (not `"data": null`), which Apollo can't
+  # parse, losing the FORBIDDEN error. Keep this when refreshing the schema (see NOTES.md).
+  docker: Docker
 
   "\n#### Required Permissions:\n\n- Action: **READ_ANY**\n- Resource: **DISK**"
   disks: [Disk!]!
