@@ -330,7 +330,8 @@ Card containers were barely visible against their screen background - see below.
   `undroid_credentials`, random IV per value) in `secure_prefs.xml`, excluded from backup/transfer.
   Replaced the deprecated EncryptedSharedPreferences; the old file is migrated once and deleted
   (see TODO.md #4 for removing the migration). `PreferencesModuleTest` uses its own alias/files and
-  is now safe to run on a device with a real login.
+  is now safe to run on a device with a real login. The Server screen's network cache (LAN IP)
+  is stored there too and cleared on logout.
 - Login screen sets `FLAG_SECURE` (the key can be shown in plain text there). Links from servers
   only open if they're http(s) (`tryOpenUri`). Only the INTERNET permission is declared.
 - Not issues, checked: no request/token logging anywhere; no secret fields queried (`me` returns
@@ -352,6 +353,14 @@ Card containers were barely visible against their screen background - see below.
 - `PreferencesModule` (formerly an `object SharedPreferences` that shadowed Android's type) provides
   the default preferences and the `SecureStore`.
 - The window theme is `Theme.Undroid` (platform Material, light + `values-night`), no AppCompat.
+- Slow queries (2026-10-29): `info.primaryNetwork` takes ~2 s on Unraid 7.3.x; everything else in
+  `info` is under 0.3 s (`baseboard`/`memory.layout` are fast despite going through dmidecode).
+  **While it runs, the API answers nothing else** - requests sent alongside it (even `vars`, ~10 ms
+  alone) all waited ~1.5 s. So it's its own query, `ServerNetworkRepository` caches the result (tied
+  to the server URL), and the Server screen shows the cache and refetches only *after* its other
+  sections have loaded - on open only if the cache is over an hour old, on pull-to-refresh always.
+  Not warmed at app start: that would stall the Dashboard's first queries. Measure per field (and
+  concurrently) before splitting or caching anything else.
 
 ## UI design system (2026-10-25)
 

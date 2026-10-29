@@ -56,6 +56,7 @@ fun ServerScreen(onBack: () -> Unit = {}, viewModel: ServerViewModel = hiltViewM
         onRefresh = viewModel::refresh,
         onRetryIdentity = viewModel::refreshIdentity,
         onRetrySystem = viewModel::refreshSystem,
+        onRetryNetwork = viewModel::refreshNetwork,
         onRetryConnect = viewModel::refreshConnect
     )
 }
@@ -68,6 +69,7 @@ fun ServerScreenContent(
     onRefresh: () -> Unit = {},
     onRetryIdentity: () -> Unit = {},
     onRetrySystem: () -> Unit = {},
+    onRetryNetwork: () -> Unit = {},
     onRetryConnect: () -> Unit = {}
 ) {
     val spacing = MaterialTheme.spacing
@@ -89,6 +91,10 @@ fun ServerScreenContent(
                 item { SectionHeader("System") }
                 item {
                     WidgetSection(result = uiState.system, onRetry = onRetrySystem, minHeight = 160.dp) { SystemCard(it) }
+                }
+                item { SectionHeader("Network") }
+                item {
+                    WidgetSection(result = uiState.network, onRetry = onRetryNetwork, minHeight = 72.dp) { NetworkCard(it) }
                 }
                 item { SectionHeader("Unraid Connect") }
                 item {
@@ -137,9 +143,23 @@ private fun SystemCard(system: ServerSystem) {
                 InfoRow("Memory", listOfNotNull((bytes / 1024).kilobytesToHumanReadable(), system.memoryType).joinToString(" "))
             }
             system.motherboard?.let { InfoRow("Motherboard", it) }
-            system.network?.let { network ->
-                HorizontalDivider()
-                InfoRow("Network", networkLabel(network))
+        }
+    }
+}
+
+@Composable
+private fun NetworkCard(network: NetworkSummary?) {
+    val spacing = MaterialTheme.spacing
+    AppCard {
+        Column(modifier = Modifier.padding(spacing.medium), verticalArrangement = Arrangement.spacedBy(spacing.small)) {
+            if (network == null) {
+                Text(
+                    "The server reports no primary network interface.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                InfoRow("Interface", networkLabel(network))
                 network.ipAddress?.let { InfoRow("IP address", it) }
             }
         }
@@ -202,9 +222,10 @@ private val previewState = ServerScreenState(
         ServerSystem(
             unraidVersion = "7.3.3", apiVersion = "4.20.0", kernel = "6.12.24-Unraid", bootTimeIso = "2026-10-10T08:00:00Z",
             cpu = "Intel Core i5-12400", cpuCores = 6, cpuThreads = 12, memoryTotalBytes = 34_359_738_368L, memoryType = "DDR4",
-            motherboard = "ASUSTeK PRIME B660M-A", network = NetworkSummary("eth0", "192.168.1.10", 1000)
+            motherboard = "ASUSTeK PRIME B660M-A"
         )
     ),
+    network = WidgetResult.Success(NetworkSummary("eth0", "192.168.1.10", 1000)),
     connect = WidgetResult.Success(
         ConnectInfo(
             status = ConnectStatus.ONLINE, owner = "tower-owner", lanIp = "192.168.1.10", wanIp = "203.0.113.7",

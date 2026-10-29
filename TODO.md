@@ -36,12 +36,13 @@ Possible follow-ups:
 
 ## 2. Server screen - built 2026-10-25
 
-More tab -> Server: three independently loading sections, each needing its own API-key
+More tab -> Server: four independently loading sections, each needing its own API-key
 permission (same pattern as the Dashboard widgets):
 - **Identity** (`vars`, VARS): name, comment, time zone, licence tag (`regTy`).
 - **System** (`info`, INFO): Unraid/API/kernel versions, uptime, CPU, cores/threads, total RAM +
-  type, motherboard, primary interface + IP. This query is slow on a real server (several seconds -
-  Unraid gathers hardware info), which is why it doesn't block the other sections.
+  type, motherboard.
+- **Network** (`info.primaryNetwork`, INFO): interface + IP. Split out of System on 2026-10-29
+  because it alone took ~2 s of System's ~2.8 s; cached (see NOTES.md → Data-layer conventions).
 - **Unraid Connect** (`server`, SERVERS): status (Online / Offline / "Not set up" when `server`
   is null), account, LAN IP, WAN IP (hidden until tapped), local/remote URL (tap opens). The
   server's Connect `apikey` is deliberately never selected (a test guards it).

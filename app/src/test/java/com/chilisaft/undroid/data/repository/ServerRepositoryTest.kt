@@ -392,15 +392,14 @@ class ServerRepositoryTest {
     }
 
     @Test
-    fun `getServerSystem combines cpu and board names, sums memory modules, and reads the primary interface`() = runBlocking {
+    fun `getServerSystem combines cpu and board names and sums memory modules`() = runBlocking {
         val json = """
         {"data": {"info": {
           "os": {"uptime": "2026-10-10T08:00:00Z"},
           "versions": {"core": {"unraid": "7.3.3", "api": "4.20.0", "kernel": "6.12.24-Unraid"}},
           "cpu": {"manufacturer": "Intel", "brand": "Core i5-12400", "cores": 6, "threads": 12},
           "memory": {"layout": [{"size": "17179869184", "type": "DDR4"}, {"size": "17179869184", "type": "DDR4"}]},
-          "baseboard": {"manufacturer": "ASUSTeK", "model": "PRIME B660M-A"},
-          "primaryNetwork": {"name": "eth0", "ipAddress": "192.168.1.10", "speed": 1000}
+          "baseboard": {"manufacturer": "ASUSTeK", "model": "PRIME B660M-A"}
         }}}
         """.trimIndent()
         mockWebServer.enqueue(MockResponse().setBody(json))
@@ -415,9 +414,6 @@ class ServerRepositoryTest {
         assertThat(system.memoryTotalBytes).isEqualTo(34_359_738_368L)
         assertThat(system.memoryType).isEqualTo("DDR4")
         assertThat(system.motherboard).isEqualTo("ASUSTeK PRIME B660M-A")
-        assertThat(system.network?.interfaceName).isEqualTo("eth0")
-        assertThat(system.network?.ipAddress).isEqualTo("192.168.1.10")
-        assertThat(system.network?.speedMbps).isEqualTo(1000)
     }
 
     @Test
@@ -428,8 +424,7 @@ class ServerRepositoryTest {
           "versions": {"core": {"unraid": "7.3.3", "api": null, "kernel": null}},
           "cpu": {"manufacturer": "Intel", "brand": "Gen Intel® Core™ i3-12100", "cores": 4, "threads": 8},
           "memory": {"layout": [{"size": "16777216", "type": "DDR4"}, {"size": "16777216", "type": "DDR4"}]},
-          "baseboard": {"manufacturer": "ASRock", "model": "H610M-ITX/ac"},
-          "primaryNetwork": {"name": "br0", "ipAddress": "192.168.69.7", "speed": null}
+          "baseboard": {"manufacturer": "ASRock", "model": "H610M-ITX/ac"}
         }}}
         """.trimIndent()
         mockWebServer.enqueue(MockResponse().setBody(json))
@@ -438,7 +433,6 @@ class ServerRepositoryTest {
 
         assertThat(system.memoryTotalBytes).isEqualTo(34_359_738_368L) // 32 GiB
         assertThat(system.cpu).isEqualTo("Intel Core i3-12100")
-        assertThat(system.network?.speedMbps).isNull()
     }
 
     @Test
@@ -449,8 +443,7 @@ class ServerRepositoryTest {
           "versions": {"core": {"unraid": null, "api": null, "kernel": null}},
           "cpu": {"manufacturer": null, "brand": null, "cores": null, "threads": null},
           "memory": {"layout": [{"size": "8589934592", "type": "DDR4"}, {"size": "8589934592", "type": "DDR5"}]},
-          "baseboard": {"manufacturer": null, "model": null},
-          "primaryNetwork": null
+          "baseboard": {"manufacturer": null, "model": null}
         }}}
         """.trimIndent()
         mockWebServer.enqueue(MockResponse().setBody(json))
@@ -461,7 +454,6 @@ class ServerRepositoryTest {
         assertThat(system.memoryType).isNull()
         assertThat(system.cpu).isNull()
         assertThat(system.motherboard).isNull()
-        assertThat(system.network).isNull()
     }
 
     @Test

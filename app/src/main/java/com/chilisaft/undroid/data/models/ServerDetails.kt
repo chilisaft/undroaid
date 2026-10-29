@@ -24,8 +24,7 @@ data class ServerSystem(
     /** e.g. "DDR4" - only when all modules agree. */
     val memoryType: String?,
     /** e.g. "ASUSTeK PRIME B660M-A". */
-    val motherboard: String?,
-    val network: NetworkSummary?
+    val motherboard: String?
 )
 
 data class NetworkSummary(

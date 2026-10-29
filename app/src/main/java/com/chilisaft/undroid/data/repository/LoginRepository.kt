@@ -45,6 +45,7 @@ class LoginRepository @Inject constructor(
     fun logout() {
         storage.serverUrl = null
         storage.apiToken = null
+        storage.serverNetworkCache = null
     }
 }
 

@@ -1,0 +1,11 @@
+# Split from ServerSystemQuery: primaryNetwork alone takes ~2 s on a real server (Unraid 7.3.3)
+# while the rest of `info` answers in well under one - see ServerNetworkRepository for the cache.
+query ServerNetworkQuery {
+    info {
+        primaryNetwork {
+            name
+            ipAddress
+            speed
+        }
+    }
+}

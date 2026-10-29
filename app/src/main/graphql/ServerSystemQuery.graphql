@@ -26,10 +26,5 @@ query ServerSystemQuery {
             manufacturer
             model
         }
-        primaryNetwork {
-            name
-            ipAddress
-            speed
-        }
     }
 }

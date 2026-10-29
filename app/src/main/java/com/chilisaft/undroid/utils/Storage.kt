@@ -22,6 +22,14 @@ class Storage @Inject constructor(
         get() = secureStore.getString(KEY_SERVER_URL)
         set(value) = secureStore.putString(KEY_SERVER_URL, value)
 
+    /**
+     * The Server screen's last primary-network result, encoded by `ServerNetworkRepository`. Kept in
+     * the [SecureStore] because it holds the server's LAN IP - as sensitive as [serverUrl].
+     */
+    var serverNetworkCache: String?
+        get() = secureStore.getString(KEY_SERVER_NETWORK_CACHE)
+        set(value) = secureStore.putString(KEY_SERVER_NETWORK_CACHE, value)
+
     var themeMode: ThemeMode
         get() = preferences.getString(KEY_THEME_MODE, null)?.let { stored ->
             runCatching { ThemeMode.valueOf(stored) }.getOrNull()
@@ -41,11 +49,12 @@ class Storage @Inject constructor(
         set(value) = preferences.edit() { putBoolean(KEY_USE_DYNAMIC_COLOR, value) }
 
     companion object {
-        /** Everything kept in the [SecureStore] - what the legacy-file migration copies over. */
+        /** The credentials kept in the [SecureStore] - what the legacy-file migration copies over. */
         val SECURE_KEYS = listOf(KEY_API_TOKEN, KEY_SERVER_URL)
 
         private const val KEY_API_TOKEN = "api_token"
         private const val KEY_SERVER_URL = "serverUrl"
+        private const val KEY_SERVER_NETWORK_CACHE = "server_network_cache"
         private const val KEY_THEME_MODE = "theme_mode"
         private const val KEY_SHOW_CORE_LIST = "show_core_list"
         private const val KEY_USE_DYNAMIC_COLOR = "use_dynamic_color"

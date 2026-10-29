@@ -30,6 +30,7 @@ class LoginRepositoryTest {
         storage = mockk {
             every { serverUrl = any() } returns Unit
             every { apiToken = any() } returns Unit
+            every { serverNetworkCache = any() } returns Unit
         }
         repository = LoginRepository(apolloClient, storage)
     }
@@ -81,10 +82,11 @@ class LoginRepositoryTest {
     }
 
     @Test
-    fun `logout clears the stored server url and api token`() {
+    fun `logout clears the stored server url, api token and cached server network`() {
         repository.logout()
 
         verify { storage.serverUrl = null }
         verify { storage.apiToken = null }
+        verify { storage.serverNetworkCache = null }
     }
 }

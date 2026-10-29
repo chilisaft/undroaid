@@ -8,7 +8,6 @@ import com.chilisaft.undroid.data.models.ConnectInfo
 import com.chilisaft.undroid.data.models.ConnectStatus
 import com.chilisaft.undroid.data.models.DockerContainerSummary
 import com.chilisaft.undroid.data.models.MetricsSample
-import com.chilisaft.undroid.data.models.NetworkSummary
 import com.chilisaft.undroid.data.models.ParityCheckInfo
 import com.chilisaft.undroid.data.models.ServerIdentity
 import com.chilisaft.undroid.data.models.ServerSystem
@@ -149,8 +148,7 @@ class ServerRepository @Inject constructor(
             cpuThreads = cpu.threads,
             memoryTotalBytes = modules.mapNotNull { it.size.toLongOrNull()?.moduleSizeInBytes() }.takeIf { it.isNotEmpty() }?.sum(),
             memoryType = memoryTypes.singleOrNull(),
-            motherboard = listOfNotNull(baseboard.manufacturer?.nonBlank(), baseboard.model?.nonBlank()).joinToString(" ").nonBlank(),
-            network = primaryNetwork?.let { NetworkSummary(it.name, it.ipAddress?.nonBlank(), it.speed?.takeIf { speed -> speed > 0 }) }
+            motherboard = listOfNotNull(baseboard.manufacturer?.nonBlank(), baseboard.model?.nonBlank()).joinToString(" ").nonBlank()
         )
     }
 
