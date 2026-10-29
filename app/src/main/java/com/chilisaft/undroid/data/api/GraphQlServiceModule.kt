@@ -34,7 +34,8 @@ object GraphQlServiceModule {
     @Provides
     @Singleton
     fun provideApolloClient(
-        okHttpClient: OkHttpClient
+        okHttpClient: OkHttpClient,
+        apiKeyStatus: ApiKeyStatus
     ): ApolloClient {
         // The real server URL and API key are applied per request by UnraidInterceptor, so the
         // builder only needs a placeholder. No subscription (WebSocket) transport: the app polls
@@ -44,6 +45,7 @@ object GraphQlServiceModule {
         return ApolloClient.Builder()
             .serverUrl(PLACEHOLDER_URL)
             .httpEngine(DefaultHttpEngine { okHttpClient })
+            .addInterceptor(KeyRejectedInterceptor(apiKeyStatus))
             .build()
     }
 }

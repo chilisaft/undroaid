@@ -1,7 +1,7 @@
+# `me` answers for any valid key, even one without permissions (role GUEST) - so a key limited to
+# some sections can still log in, and those sections show their own "no permission" state.
 query TestLoginQuery {
-    info {
-        os {
-            hostname
-        }
+    me {
+        name
     }
 }

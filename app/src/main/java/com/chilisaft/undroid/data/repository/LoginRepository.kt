@@ -2,6 +2,8 @@ package com.chilisaft.undroid.data.repository
 
 import com.apollographql.apollo.ApolloClient
 import com.apollographql.apollo.exception.ApolloException
+import com.chilisaft.undroid.data.api.ApiKeyStatus
+import com.chilisaft.undroid.data.api.UnraidInterceptor
 import com.chilisaft.undroid.data.api.toUserMessage
 import com.chilisaft.undroid.data.models.Login
 import com.chilisaft.undroid.graphql.TestLoginQuery
@@ -10,7 +12,8 @@ import javax.inject.Inject
 
 class LoginRepository @Inject constructor(
     private val apolloClient: ApolloClient,
-    private val storage: Storage
+    private val storage: Storage,
+    private val apiKeyStatus: ApiKeyStatus
 ) {
     suspend fun login(login: Login): Result<Boolean> {
         val serverUrl = login.serverUrl?.trim() ?: ""
@@ -19,13 +22,14 @@ class LoginRepository @Inject constructor(
         return try {
             val response = apolloClient.query(TestLoginQuery())
                 .addHttpHeader("X-Server-Url", serverUrl)
-                .addHttpHeader("X-API-KEY-OVERRIDE", login.apiToken?.trim() ?: "")
+                .addHttpHeader(UnraidInterceptor.API_KEY_OVERRIDE_HEADER, login.apiToken?.trim() ?: "")
                 .execute()
 
-            if (response.data?.info != null && !response.hasErrors()) {
+            if (response.data?.me != null && !response.hasErrors()) {
                 // Login successful, save credentials
                 storage.serverUrl = login.serverUrl
                 storage.apiToken = login.apiToken
+                apiKeyStatus.clear()
                 Result.success(true)
             } else {
                 val errorMessage = response.errors?.joinToString { it.message } ?: "Login failed"
@@ -40,6 +44,11 @@ class LoginRepository @Inject constructor(
 
     fun getSavedLogin(): Login {
         return Login(storage.serverUrl, storage.apiToken)
+    }
+
+    /** After the server rejected the saved key: drop it but keep the server URL for the login form. */
+    fun forgetApiKey() {
+        storage.apiToken = null
     }
 
     fun logout() {

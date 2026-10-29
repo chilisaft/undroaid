@@ -419,50 +419,48 @@ functionality. The implementation plan for each is in [TODO.md](TODO.md).
 (Shares and Server were both built on 2026-10-25 - see TODO.md #1/#2. No stub screens remain.)
 
 
-## Known limitations / things worth verifying against a real server
+## Known limitations / verified against a real server
 
-This session did have adb access to the user's real device (a Pixel 10 Pro, connected wirelessly)
-and every build below was installed and launched there - but there's still no live Unraid server
-in reach here, so whether the GraphQL queries actually resolve as expected against real Unraid
-data is unverified beyond compile + JVM-unit-tests. The user has been testing manually on-device.
+Since 2026-10-29 there is a real server to test against (Unraid 7.3.4, API 4.37.9, the user's own,
+reached from the `Medium_Phone` emulator and from read-only curl scripts the user runs with their
+key). What that settled:
 
-- **Permission-denied detection** (`data/api/GraphQlErrors.kt`) is a heuristic — checks
-  `extensions.code` for FORBIDDEN/UNAUTHORIZED/etc, falls back to message keyword matching.
-  The Unraid API schema documents *which* permission each field needs but not the actual
-  error shape on failure. Worth testing with a genuinely restricted API key to confirm the
-  soft-fail UI ("Your API key doesn't have permission...") actually triggers correctly.
-- **Docker start/stop/pause/unpause, icons, and Web UI links** (`DockerRepository`,
-  `ServerRepository`, `ui/docker`, `ui/dashboard`, shared `ui/components/ContainerIconBadge.kt`) -
-  compile + JVM-unit-test verified only, same caveat as everything else in this section: no live
-  Unraid server or persistent emulator in this sandbox to confirm the mutations actually work
-  against a real Docker daemon, that `iconUrl` actually resolves to a loadable image for real
-  containers (Dashboard preview and Docker tab both use it now), or that `webUiUrl` opens the
-  right thing via `LocalUriHandler`.
+- **Verified by real use**: Docker start/stop/pause/restart, updates, icons (`iconUrl` loads),
+  Web UI links, live logs; the Main tab's array/disk tables and parity-check controls (see the
+  parity entries below for what real use uncovered); Dashboard; Shares; Server; Devices.
+- **`BigInt` arrives as a JSON number**, not a string (`ArrayDisk.size`/`fsSize`/`fsFree`/`fsUsed`
+  are all ints). The `kotlin.String` mapping still works - Apollo's string adapter reads a number
+  token as its text - and the Main tab shows correct sizes. `fsSize`/`fsFree`/`fsUsed` are null
+  for a second pool member (`cache2`), which the disk row handles by showing size only.
+- **`me`** resolves for an API key: `name` and `description` are the key's own (e.g. "undroaid" /
+  "Undroaid app api key"), `roles` the key's role (`ADMIN`), plus a full `permissions` list. The
+  user menu shows name and roles; `description` is queried but not shown.
+- **An invalid API key** gets `extensions.code = "UNAUTHENTICATED"` ("Invalid API key format",
+  `originalError.statusCode` 401, over HTTP 200) on every field. This is not a missing permission:
+  `GraphQlErrors.kt` keeps it out of `anyPermissionDenied()` and reports it via `anyKeyRejected()`.
+  `KeyRejectedInterceptor` (an Apollo interceptor on the app's client) watches every response for
+  it (or an HTTP 401) and sets the singleton `ApiKeyStatus`; `ApiKeyRejectedDialog`, over the
+  logged-in graph in `RootNavGraph`, then asks the user to log in again - it forgets the key, keeps
+  the server URL (the login form prefills it) and goes to login. A successful login clears the
+  status. Login checks themselves (`X-API-KEY-OVERRIDE` requests) are skipped - the form shows
+  their error.
+- **The login check is `me { name }`** (`TestLoginQuery`), not `info.os.hostname`: `me` answers for
+  any valid key, even a GUEST key with no permissions, so a key limited to some sections can log in
+  and those sections show the lock placeholder. Previously such a key couldn't log in at all.
+- **Permission-denied detection** (`data/api/GraphQlErrors.kt`) is confirmed: a valid key without
+  the needed permission gets `extensions.code = "FORBIDDEN"` ("Forbidden resource",
+  `originalError.statusCode` 403) on the field, which the code check catches. Tested with a key that
+  has no permissions at all (`me` still resolves for it: role `GUEST`, empty `permissions`).
+- **Notification bell badge** (`DisposableEffect` in `NotificationsScreen`) confirmed by the user:
+  it updates after dismissing a notification and leaving with the system back gesture.
 - **WebSocket subscriptions were tried and abandoned** for CPU/memory - `ApolloClient`'s
   WebSocket transport is correctly wired (`data/api/GraphQlServiceModule.kt`, explicit
   `httpEngine`/`subscriptionNetworkTransport` construction — the `.okHttpClient()`
   convenience shortcut crashes if combined with `.webSocketServerUrl()`, see git history),
-  but I couldn't verify the actual subscription handshake/protocol against a live server, and
-  a subscription's push cadence isn't client-controllable anyway. Switched to a 1s HTTP poll
-  instead, which is guaranteed and now has test coverage. If push-based live updates are ever
+  but a subscription's push cadence isn't client-controllable, so CPU/memory use a 1s HTTP poll
+  instead, which is guaranteed and has test coverage. If push-based live updates are ever
   wanted (e.g. for array status via `arraySubscription`, or notifications via
   `notificationAdded`), the transport groundwork is already there.
-- **This session's new GraphQL operations** - `DockerContainerLogsQuery` (`docker.logs`),
-  `ServerVersionQuery` (`info.versions.core.unraid`), `ApiKeyInfoQuery` (`me`) - are all
-  compile/unit-test verified only. In particular, `me`'s exact resolution behavior for an
-  API-key-authenticated request (does `roles` reflect the key's actual granted roles? does
-  `description` ever come back non-blank?) hasn't been confirmed against a real key.
-- **Notification bell badge fix** (`DisposableEffect` in `NotificationsScreen`) fixes a real,
-  understood bug (see "What's actually working" above) but wasn't manually re-tested on-device
-  with the system back gesture specifically - worth a quick confirm.
-- **Main tab's array/disk queries and mutations** (`ArrayRepository`, `MainArrayQuery`,
-  `SystemDisksQuery`, `ArraySetStateMutation`, `ParityCheck*Mutation`) - compile/unit-test
-  verified only, same caveat as everything else GraphQL-shaped in this app. Specifically worth
-  checking against a real server: whether `ArrayDisk.size`/`fsUsed`/`fsFree`/etc. (the `BigInt`
-  scalar, mapped to `kotlin.String` this session - see below) actually arrive as JSON strings
-  rather than raw JSON numbers, whether starting an actually-encrypted array with a password
-  really works, and whether a real parity check's `progress`/`speed` fields update the way the
-  5s poll expects.
 - **`array.parityCheckStatus.status` genuinely read `CANCELLED` while a check was actively
   running** - confirmed by the user directly against their own server's API (not a client bug;
   our query/mapping matched the schema exactly, and the UI's "Cancelled" text only ever rendered
@@ -531,11 +529,10 @@ data is unverified beyond compile + JVM-unit-tests. The user has been testing ma
   capability. Uses the *parity* disk's size specifically, not `ArrayStatus.totalKb` (sum of data
   disks) - a parity check scans the parity disk, a different quantity entirely.
 - **`BigInt` scalar mapped to `kotlin.String`** (`app/build.gradle.kts`, alongside the existing
-  `PrefixedID`/`DateTime` mappings) - added this session because `ArrayDisk.size` and friends are
-  the first `BigInt` fields this app actually queries. Unmapped, Apollo generates `kotlin.Any?`
-  for them; mapping to `String` lets the repository parse with the same `.toLongOrNull()` pattern
-  already used for `Capacity.used`/`total`. Assumes the server serializes `BigInt` as a JSON
-  string like other GraphQL BigInt conventions do - unverified against this server specifically.
+  `PrefixedID`/`DateTime` mappings) - `ArrayDisk.size` and friends were the first `BigInt` fields
+  queried. Unmapped, Apollo generates `kotlin.Any?`; as `String` the repository parses them with
+  the same `.toLongOrNull()` pattern as `Capacity.used`/`total`. The server sends JSON numbers
+  (see the top of this section), which the string adapter accepts.
 - **Main tab doesn't cover every array mutation the schema has** - only `setState` (start/stop)
   and `parityCheck.*` are wired up. `addDiskToArray`/`removeDiskFromArray`/`mountArrayDisk`/
   `unmountArrayDisk` still have no UI (array topology editing felt like a separate, riskier
@@ -592,6 +589,9 @@ hiccup no longer blanks the array device tables/health card, and vice versa - th
 gap called out in the previous "Suggested next steps" entry.
 
 ## Test coverage
+
+252 JVM unit tests, all passing as of 2026-10-29. The history below is from the 2026-10-25
+session, when the count was 160.
 
 160 JVM unit tests (`./gradlew testDebugUnitTest`), all passing as of this note (up from 96 at
 the start of this session - see the "Session update" notes above for what added the difference:

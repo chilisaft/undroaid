@@ -101,4 +101,18 @@ class LoginViewModelTest {
         val state = viewModel.uiState.value
         assertThat(state.isLoggedIn).isTrue()
     }
+
+    @Test
+    fun `a saved server url without a key prefills the form without logging in`() {
+        every { repository.getSavedLogin() } returns Login("http://test.com", null)
+
+        viewModel = LoginViewModel(repository)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertThat(state.serverUrl).isEqualTo("http://test.com")
+        assertThat(state.apiToken).isEmpty()
+        assertThat(state.isLoading).isFalse()
+        io.mockk.coVerify(exactly = 0) { repository.login(any()) }
+    }
 }

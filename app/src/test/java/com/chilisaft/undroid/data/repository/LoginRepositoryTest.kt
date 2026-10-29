@@ -1,6 +1,7 @@
 package com.chilisaft.undroid.data.repository
 
 import com.apollographql.apollo.ApolloClient
+import com.chilisaft.undroid.data.api.ApiKeyStatus
 import com.chilisaft.undroid.data.models.Login
 import com.chilisaft.undroid.utils.Storage
 import com.google.common.truth.Truth.assertThat
@@ -20,6 +21,7 @@ class LoginRepositoryTest {
     private lateinit var apolloClient: ApolloClient
     private lateinit var storage: Storage
     private lateinit var repository: LoginRepository
+    private lateinit var apiKeyStatus: ApiKeyStatus
 
     @Before
     fun setUp() {
@@ -32,7 +34,8 @@ class LoginRepositoryTest {
             every { apiToken = any() } returns Unit
             every { serverNetworkCache = any() } returns Unit
         }
-        repository = LoginRepository(apolloClient, storage)
+        apiKeyStatus = ApiKeyStatus()
+        repository = LoginRepository(apolloClient, storage, apiKeyStatus)
     }
 
     @After
@@ -46,10 +49,8 @@ class LoginRepositoryTest {
         val successResponse = """
         {
           "data": {
-            "info": {
-              "os": {
-                "hostname": "Test Server"
-              }
+            "me": {
+              "name": "restrictive"
             }
           }
         }
@@ -61,6 +62,16 @@ class LoginRepositoryTest {
         assertThat(result.isSuccess).isTrue()
         verify { storage.serverUrl = login.serverUrl }
         verify { storage.apiToken = login.apiToken }
+    }
+
+    @Test
+    fun `a successful login clears an earlier key rejection`() = runBlocking {
+        apiKeyStatus.reportRejected()
+        mockWebServer.enqueue(MockResponse().setBody("""{"data": {"me": {"name": "undroid"}}}"""))
+
+        repository.login(Login("http://test.com", "new-token"))
+
+        assertThat(apiKeyStatus.rejected.value).isFalse()
     }
 
     @Test
@@ -88,5 +99,13 @@ class LoginRepositoryTest {
         verify { storage.serverUrl = null }
         verify { storage.apiToken = null }
         verify { storage.serverNetworkCache = null }
+    }
+
+    @Test
+    fun `forgetApiKey clears only the api token`() {
+        repository.forgetApiKey()
+
+        verify { storage.apiToken = null }
+        verify(exactly = 0) { storage.serverUrl = any() }
     }
 }

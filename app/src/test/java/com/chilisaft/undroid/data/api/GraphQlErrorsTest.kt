@@ -43,4 +43,25 @@ class GraphQlErrorsTest {
         )
         assertThat(errors.anyPermissionDenied()).isTrue()
     }
+
+    // The real shape Unraid 7.3.4 sends for an invalid API key.
+    private val invalidKeyError = Error.Builder("Invalid API key format")
+        .extensions(mapOf("code" to "UNAUTHENTICATED", "originalError" to mapOf("statusCode" to 401)))
+        .build()
+
+    @Test
+    fun `a rejected key is not a missing permission`() {
+        assertThat(listOf(invalidKeyError).anyPermissionDenied()).isFalse()
+    }
+
+    @Test
+    fun `detects a rejected key via the UNAUTHENTICATED code`() {
+        assertThat(listOf(invalidKeyError).anyKeyRejected()).isTrue()
+    }
+
+    @Test
+    fun `a forbidden field is not a rejected key`() {
+        val error = Error.Builder("Forbidden resource").extensions(mapOf("code" to "FORBIDDEN")).build()
+        assertThat(listOf(error).anyKeyRejected()).isFalse()
+    }
 }

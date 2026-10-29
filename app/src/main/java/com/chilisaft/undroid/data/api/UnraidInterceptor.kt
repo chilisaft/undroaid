@@ -27,9 +27,9 @@ class UnraidInterceptor @Inject constructor(private val storage: Storage) : Inte
         builder.url(sanitizedUrl.toHttpUrlOrNull() ?: throw InvalidServerUrlException(sanitizedUrl))
 
         // 2. Handle API Key Override or from Storage
-        val overrideToken = originalRequest.header("X-API-KEY-OVERRIDE")
+        val overrideToken = originalRequest.header(API_KEY_OVERRIDE_HEADER)
         val finalToken = (overrideToken ?: storage.apiToken)?.trim()
-        builder.removeHeader("X-API-KEY-OVERRIDE")
+        builder.removeHeader(API_KEY_OVERRIDE_HEADER)
 
         if (!finalToken.isNullOrBlank()) {
             builder.header("X-API-KEY", finalToken)
@@ -45,6 +45,9 @@ class UnraidInterceptor @Inject constructor(private val storage: Storage) : Inte
     }
 
     companion object {
+        /** Set on a request to use this API key instead of the saved one (the login check); stripped before it's sent. */
+        const val API_KEY_OVERRIDE_HEADER = "X-API-KEY-OVERRIDE"
+
         /** Set on a request (in seconds) to raise its read timeout; stripped before it's sent. */
         const val READ_TIMEOUT_HEADER = "X-Read-Timeout-Seconds"
     }

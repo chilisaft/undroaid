@@ -40,6 +40,9 @@ class LoginViewModel @Inject constructor(
             )
             // Perform automatic login on a background thread without blocking
             login()
+        } else if (!savedLogin.serverUrl.isNullOrBlank()) {
+            // The key was rejected and forgotten (see ApiKeyRejectedDialog) - only a new key is needed.
+            _uiState.value = _uiState.value.copy(serverUrl = savedLogin.serverUrl)
         }
     }
 

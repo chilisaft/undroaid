@@ -24,7 +24,7 @@ class GraphQlServiceModuleTest {
         }
         val okHttpClient = GraphQlServiceModule.provideOkHttpClient(UnraidInterceptor(storage))
 
-        val apolloClient = GraphQlServiceModule.provideApolloClient(okHttpClient)
+        val apolloClient = GraphQlServiceModule.provideApolloClient(okHttpClient, ApiKeyStatus())
 
         assertThat(apolloClient).isNotNull()
     }

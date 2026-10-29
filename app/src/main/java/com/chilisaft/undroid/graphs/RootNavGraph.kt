@@ -33,6 +33,7 @@ fun RootNavGraph(
                 userMessages = userMessages,
                 onLoggedOut = navController::navigateToLoginAfterLogout
             )
+            ApiKeyRejectedDialog(onLogInAgain = navController::navigateToLoginAfterLogout)
         }
     }
 }
