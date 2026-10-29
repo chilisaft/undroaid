@@ -11,6 +11,8 @@ import com.chilisaft.undroid.data.models.ArrayRunState
 import com.chilisaft.undroid.data.models.DiskIdentification
 import com.chilisaft.undroid.data.models.FlashInfo
 import com.chilisaft.undroid.data.models.ParityCheckInfo
+import com.chilisaft.undroid.data.models.ParityHistoryEntry
+import com.chilisaft.undroid.data.models.ParityHistoryStatus
 import com.chilisaft.undroid.data.models.WidgetResult
 import com.chilisaft.undroid.graphql.fragment.ArrayDiskFields
 import com.chilisaft.undroid.graphql.ArraySetStateMutation
@@ -21,6 +23,7 @@ import com.chilisaft.undroid.graphql.ParityCheckPauseMutation
 import com.chilisaft.undroid.graphql.ParityCheckResumeMutation
 import com.chilisaft.undroid.graphql.ParityCheckStartMutation
 import com.chilisaft.undroid.graphql.ParityCheckStatusQuery
+import com.chilisaft.undroid.graphql.ParityHistoryQuery
 import com.chilisaft.undroid.graphql.SystemDisksQuery
 import com.chilisaft.undroid.graphql.type.ArrayDiskType
 import com.chilisaft.undroid.graphql.type.ArrayState
@@ -28,6 +31,8 @@ import com.chilisaft.undroid.graphql.type.ArrayStateInput
 import com.chilisaft.undroid.graphql.type.ArrayStateInputState
 import com.chilisaft.undroid.graphql.type.DiskInterfaceType
 import com.chilisaft.undroid.graphql.type.DiskSmartStatus
+import com.chilisaft.undroid.graphql.type.ParityCheckStatus
+import java.time.Instant
 import javax.inject.Inject
 
 /** Backs the Main tab - array/parity/cache/boot device tables plus array/parity-check control. */
@@ -57,6 +62,12 @@ class ArrayRepository @Inject constructor(
      */
     suspend fun getParityCheckStatus(): WidgetResult<ParityCheckInfo> =
         apolloClient.runWidgetQuery(ParityCheckStatusQuery()) { data -> data.array.parityCheckStatus.toParityCheckInfo() }
+
+    /** Past parity checks, newest first. */
+    suspend fun getParityHistory(): WidgetResult<List<ParityHistoryEntry>> =
+        apolloClient.runWidgetQuery(ParityHistoryQuery()) { data ->
+            data.parityHistory.map { it.toParityHistoryEntry() }.sortedByDescending { it.date }
+        }
 
     suspend fun setArrayState(start: Boolean, password: String?): WidgetResult<Unit> =
         apolloClient.runWidgetMutation(
@@ -89,6 +100,19 @@ class ArrayRepository @Inject constructor(
         caches = caches.map { it.arrayDiskFields.toArrayDeviceInfo() },
         parities = parities.map { it.arrayDiskFields.toArrayDeviceInfo() },
         disks = disks.map { it.arrayDiskFields.toArrayDeviceInfo() }
+    )
+
+    private fun ParityHistoryQuery.ParityHistory.toParityHistoryEntry() = ParityHistoryEntry(
+        date = date?.let { runCatching { Instant.parse(it) }.getOrNull() },
+        status = when (status) {
+            ParityCheckStatus.COMPLETED -> ParityHistoryStatus.COMPLETED
+            ParityCheckStatus.CANCELLED -> ParityHistoryStatus.CANCELLED
+            ParityCheckStatus.FAILED -> ParityHistoryStatus.FAILED
+            else -> ParityHistoryStatus.OTHER
+        },
+        durationSeconds = duration?.toLong(),
+        bytesPerSecond = speed?.toDoubleOrNull(),
+        errors = errors
     )
 
     private fun ArrayDiskFields.toArrayDeviceInfo() = ArrayDeviceInfo(

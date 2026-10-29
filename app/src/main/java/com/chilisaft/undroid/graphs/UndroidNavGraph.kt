@@ -10,7 +10,7 @@ import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.FolderShared
 import androidx.compose.material.icons.filled.Layers
-import androidx.compose.material.icons.filled.Memory
+import androidx.compose.material.icons.filled.DeveloperBoard
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.outlined.Computer
@@ -73,7 +73,7 @@ private const val DEVICES_ROUTE = "devices"
  */
 sealed class BottomNavDestination(val title: String, val route: String, val icon: ImageVector, val icon_selected: ImageVector) {
     data object Dashboard : BottomNavDestination(
-        title = "Dashboard",
+        title = "Home",
         route = "dashboard",
         icon = Icons.Outlined.Dashboard,
         icon_selected = Icons.Filled.Dashboard
@@ -261,7 +261,7 @@ fun UndroidNavGraph(
                 showMoreSheet = false
                 navController.navigate(SERVER_ROUTE)
             })
-            ActionSheetItem(Icons.Filled.Memory, "Devices", {
+            ActionSheetItem(Icons.Filled.DeveloperBoard, "Devices", {
                 showMoreSheet = false
                 navController.navigate(DEVICES_ROUTE)
             })

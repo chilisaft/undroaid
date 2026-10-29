@@ -69,3 +69,15 @@ fun Long.toRemainingTimeLabel(): String {
         else -> "%ds".format(seconds)
     }
 }
+
+/** A transfer rate in bytes per second as a short label with decimal units, e.g. 159241497.0 -> "159.2 MB/s". */
+fun Double.bytesPerSecondToLabel(): String {
+    val units = listOf("B/s", "KB/s", "MB/s", "GB/s")
+    var value = this
+    var unitIndex = 0
+    while (value >= 1000.0 && unitIndex < units.lastIndex) {
+        value /= 1000.0
+        unitIndex++
+    }
+    return if (unitIndex == 0) "%.0f %s".format(value, units[0]) else "%.1f %s".format(value, units[unitIndex])
+}

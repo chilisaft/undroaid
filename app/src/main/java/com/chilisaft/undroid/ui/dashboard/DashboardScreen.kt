@@ -5,7 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Dns
+import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Reorder
 import androidx.compose.material3.*
@@ -29,6 +29,7 @@ import androidx.lifecycle.compose.LifecycleStartEffect
 import com.chilisaft.undroid.data.models.ArrayStatus
 import com.chilisaft.undroid.data.models.DockerContainerState
 import com.chilisaft.undroid.data.models.DockerContainerSummary
+import com.chilisaft.undroid.data.models.NetworkRate
 import com.chilisaft.undroid.data.models.ParityCheckInfo
 import com.chilisaft.undroid.data.models.SystemMetrics
 import com.chilisaft.undroid.data.models.VmDomain
@@ -74,6 +75,8 @@ fun DashboardScreen(
         onRefresh = viewModel::refresh,
         onRetryArrayStatus = viewModel::refreshArrayStatus,
         onRetrySystemMetrics = viewModel::refreshSystemMetrics,
+        onRetryTemperatures = viewModel::refreshTemperatures,
+        onRetryNetwork = viewModel::refreshNetwork,
         onRetryContainers = viewModel::refreshContainers,
         onRetryVms = viewModel::refreshVms
     )
@@ -89,12 +92,14 @@ fun DashboardScreenContent(
     onRefresh: () -> Unit = {},
     onRetryArrayStatus: () -> Unit = {},
     onRetrySystemMetrics: () -> Unit = {},
+    onRetryTemperatures: () -> Unit = {},
+    onRetryNetwork: () -> Unit = {},
     onRetryContainers: () -> Unit = {},
     onRetryVms: () -> Unit = {}
 ) {
     val spacing = MaterialTheme.spacing
     Scaffold(
-        topBar = { TabTopBar(title = uiState.serverName ?: "Dashboard", icon = Icons.Filled.Dns, actions = topBarActions) }
+        topBar = { TabTopBar(title = uiState.serverName ?: "Home", icon = Icons.Filled.Dashboard, actions = topBarActions) }
     ) { padding ->
         PullToRefreshBox(
             isRefreshing = uiState.isRefreshing,
@@ -135,6 +140,25 @@ fun DashboardScreenContent(
                 }
 
                 item {
+                    // Same height side by side, whichever card's content is taller.
+                    Row(
+                        modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+                        horizontalArrangement = Arrangement.spacedBy(spacing.itemSpacing)
+                    ) {
+                        Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                            WidgetSection(result = uiState.temperatures, onRetry = onRetryTemperatures, minHeight = 110.dp) { temperatures ->
+                                TemperatureCard(temperatures, modifier = Modifier.fillMaxSize())
+                            }
+                        }
+                        Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                            WidgetSection(result = uiState.network, onRetry = onRetryNetwork, minHeight = 110.dp) { rate ->
+                                NetworkCard(rate, modifier = Modifier.fillMaxSize())
+                            }
+                        }
+                    }
+                }
+
+                item {
                     WidgetSection(result = uiState.containers, onRetry = onRetryContainers, minHeight = 80.dp) { containers ->
                         ResourcePreviewCard(
                             title = "Docker",
@@ -150,7 +174,7 @@ fun DashboardScreenContent(
                             ResourceListItem(
                                 title = container.name,
                                 tone = container.state.statusTone,
-                                statusText = container.state.label,
+                                statusText = container.statusText,
                                 size = ResourceItemSize.Compact,
                                 leading = { size ->
                                     ContainerIconBadge(container.iconUrl, isRunning = container.state == DockerContainerState.RUNNING, size = size)
@@ -410,11 +434,11 @@ private val previewSystemMetrics = SystemMetrics(
 )
 
 private val previewContainers = listOf(
-    DockerContainerSummary("Plex Media Server", state = DockerContainerState.RUNNING, iconUrl = null),
-    DockerContainerSummary("Nextcloud", state = DockerContainerState.RUNNING, iconUrl = null),
-    DockerContainerSummary("Home Assistant", state = DockerContainerState.EXITED, iconUrl = null),
-    DockerContainerSummary("qBittorrent", state = DockerContainerState.PAUSED, iconUrl = null),
-    DockerContainerSummary("Pi-hole", state = DockerContainerState.RUNNING, iconUrl = null)
+    DockerContainerSummary("Plex Media Server", state = DockerContainerState.RUNNING, statusText = "Up 3 hours", iconUrl = null),
+    DockerContainerSummary("Nextcloud", state = DockerContainerState.RUNNING, statusText = "Up 3 hours (healthy)", iconUrl = null),
+    DockerContainerSummary("Home Assistant", state = DockerContainerState.EXITED, statusText = "Exited (0) 2 days ago", iconUrl = null),
+    DockerContainerSummary("qBittorrent", state = DockerContainerState.PAUSED, statusText = "Up 5 hours (Paused)", iconUrl = null),
+    DockerContainerSummary("Pi-hole", state = DockerContainerState.RUNNING, statusText = "Up 3 hours", iconUrl = null)
 )
 
 private val previewVms = listOf(
@@ -433,6 +457,8 @@ fun DashboardPreview() {
                 arrayStatus = WidgetResult.Success(previewArrayStatus),
                 parityCheck = WidgetResult.Success(previewParityCheckIdle),
                 systemMetrics = WidgetResult.Success(previewSystemMetrics),
+                temperatures = WidgetResult.Success(previewTemperatures),
+                network = WidgetResult.Success(NetworkRate("br0", 1_053_199.0, 3_178.0)),
                 containers = WidgetResult.Success(previewContainers),
                 vms = WidgetResult.Success(previewVms),
                 unreadNotificationCount = WidgetResult.Success(3)

@@ -3,6 +3,7 @@ query DockerStatusQuery {
         containers {
             names
             state
+            status
             iconUrl
         }
     }

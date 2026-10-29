@@ -49,7 +49,7 @@ fun ApiKeyRejectedDialog(onLogInAgain: () -> Unit, viewModel: ApiKeyRejectedView
             TextButton(onClick = {
                 viewModel.logInAgain()
                 onLogInAgain()
-            }) { Text("Log in again") }
+            }) { Text("Log In Again") }
         }
     )
 }

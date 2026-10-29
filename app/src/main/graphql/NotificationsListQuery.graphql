@@ -1,6 +1,6 @@
-query NotificationsListQuery {
+query NotificationsListQuery($type: NotificationType!) {
     notifications {
-        list(filter: { type: UNREAD, offset: 0, limit: 50 }) {
+        list(filter: { type: $type, offset: 0, limit: 50 }) {
             id
             title
             subject

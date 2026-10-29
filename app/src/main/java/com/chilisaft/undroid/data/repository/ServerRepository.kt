@@ -10,6 +10,12 @@ import com.chilisaft.undroid.data.models.LicenceDates
 import com.chilisaft.undroid.data.models.LicenceProblem
 import com.chilisaft.undroid.data.models.DockerContainerSummary
 import com.chilisaft.undroid.data.models.MetricsSample
+import com.chilisaft.undroid.data.models.NetworkRate
+import com.chilisaft.undroid.data.models.SensorKind
+import com.chilisaft.undroid.data.models.SensorsSample
+import com.chilisaft.undroid.data.models.TemperatureLevel
+import com.chilisaft.undroid.data.models.TemperatureOverview
+import com.chilisaft.undroid.data.models.TemperatureSensorReading
 import com.chilisaft.undroid.data.models.ParityCheckInfo
 import com.chilisaft.undroid.data.models.ServerIdentity
 import com.chilisaft.undroid.data.models.ServerSystem
@@ -19,6 +25,8 @@ import com.chilisaft.undroid.graphql.ApiKeyInfoQuery
 import com.chilisaft.undroid.graphql.ArrayStatusQuery
 import com.chilisaft.undroid.graphql.DockerStatusQuery
 import com.chilisaft.undroid.graphql.MetricsPollQuery
+import com.chilisaft.undroid.graphql.NetworkRatesQuery
+import com.chilisaft.undroid.graphql.TemperaturesQuery
 import com.chilisaft.undroid.graphql.ParityCheckStatusQuery
 import com.chilisaft.undroid.graphql.ServerConnectQuery
 import com.chilisaft.undroid.graphql.ServerIdentityQuery
@@ -30,7 +38,10 @@ import com.chilisaft.undroid.graphql.SystemMetricsQuery
 import com.chilisaft.undroid.graphql.type.RegistrationState
 import com.chilisaft.undroid.graphql.type.RegistrationType
 import com.chilisaft.undroid.graphql.type.Role
+import com.chilisaft.undroid.graphql.type.SensorType
 import com.chilisaft.undroid.graphql.type.ServerStatus
+import com.chilisaft.undroid.graphql.type.TemperatureStatus
+import com.chilisaft.undroid.graphql.type.TemperatureUnit
 import java.time.Instant
 import javax.inject.Inject
 import kotlinx.coroutines.delay
@@ -149,6 +160,75 @@ class ServerRepository @Inject constructor(
         }
     }
 
+    /**
+     * Temperatures and network throughput every [intervalMillis] - slower than
+     * [observeSystemMetricsPoll], since the network query alone takes about a second on a real
+     * server. Emits failures too, so the caller can show a permission error before any reading.
+     * [preferredInterface] is asked on every tick (the primary-interface cache can fill meanwhile).
+     */
+    fun observeSensorsPoll(preferredInterface: () -> String?, intervalMillis: Long = 5_000): Flow<SensorsSample> = flow {
+        while (true) {
+            emit(SensorsSample(getTemperatures(), getNetworkRate(preferredInterface())))
+            delay(intervalMillis)
+        }
+    }
+
+    /** Every temperature sensor; null `metrics.temperature` (no sensors read) is an empty overview. */
+    suspend fun getTemperatures(): WidgetResult<TemperatureOverview> =
+        apolloClient.runWidgetQuery(TemperaturesQuery()) { data ->
+            val temperature = data.metrics.temperature
+            TemperatureOverview(
+                sensors = temperature?.sensors.orEmpty().map { it.toReading() },
+                warningCount = temperature?.summary?.warningCount ?: 0,
+                criticalCount = temperature?.summary?.criticalCount ?: 0
+            )
+        }
+
+    /**
+     * Throughput of the server's main interface: [preferredInterface] (the cached
+     * `info.primaryNetwork`) when the server lists it, otherwise see [pickMainInterface].
+     * Null when no interface qualifies.
+     */
+    suspend fun getNetworkRate(preferredInterface: String?): WidgetResult<NetworkRate?> =
+        apolloClient.runWidgetQuery(NetworkRatesQuery()) { data ->
+            val interfaces = data.metrics.network
+            val chosen = interfaces.firstOrNull { it.name == preferredInterface }
+                ?: pickMainInterface(interfaces.filter { it.operstate == "up" }.map { it.name })?.let { name -> interfaces.first { it.name == name } }
+            chosen?.let { NetworkRate(it.name, it.rxSec, it.txSec) }
+        }
+
+    private fun TemperaturesQuery.Sensor.toReading() = TemperatureSensorReading(
+        id = id,
+        name = name,
+        kind = when (type) {
+            SensorType.CPU_PACKAGE -> SensorKind.CPU_PACKAGE
+            SensorType.CPU_CORE -> SensorKind.CPU_CORE
+            SensorType.MOTHERBOARD -> SensorKind.MOTHERBOARD
+            SensorType.CHIPSET -> SensorKind.CHIPSET
+            SensorType.GPU -> SensorKind.GPU
+            SensorType.DISK -> SensorKind.DISK
+            SensorType.NVME -> SensorKind.NVME
+            SensorType.AMBIENT -> SensorKind.AMBIENT
+            SensorType.VRM -> SensorKind.VRM
+            else -> SensorKind.OTHER
+        },
+        value = current.value,
+        unitSymbol = when (current.unit) {
+            TemperatureUnit.FAHRENHEIT -> "°F"
+            TemperatureUnit.KELVIN -> " K"
+            TemperatureUnit.RANKINE -> "°R"
+            else -> "°C"
+        },
+        level = when (current.status) {
+            TemperatureStatus.NORMAL -> TemperatureLevel.NORMAL
+            TemperatureStatus.WARNING -> TemperatureLevel.WARNING
+            TemperatureStatus.CRITICAL -> TemperatureLevel.CRITICAL
+            else -> TemperatureLevel.UNKNOWN
+        },
+        warning = warning,
+        critical = critical
+    )
+
     private fun ServerSystemQuery.Info.toServerSystem(): ServerSystem {
         val modules = memory.layout
         val memoryTypes = modules.mapNotNull { it.type?.nonBlank() }.distinct()
@@ -206,6 +286,7 @@ class ServerRepository @Inject constructor(
     private fun DockerStatusQuery.Container.toDockerContainerSummary() = DockerContainerSummary(
         name = names.firstOrNull()?.removePrefix("/") ?: "Unknown",
         state = state.toDockerContainerState(),
+        statusText = status,
         iconUrl = iconUrl
     )
 
@@ -259,3 +340,13 @@ class ServerRepository @Inject constructor(
     }
 
 }
+
+/**
+ * Picks the main interface by Unraid's own naming when the primary one isn't known yet: its
+ * bridge `br0`, then a bond, then the first ethernet port. Docker's and VMs' virtual interfaces
+ * (veth*, br-*, shim-*, virbr*, vnet*), loopback and VPN tunnels never qualify.
+ */
+internal fun pickMainInterface(names: List<String>): String? =
+    names.firstOrNull { it == "br0" }
+        ?: names.firstOrNull { it.startsWith("bond") }
+        ?: names.firstOrNull { it.startsWith("eth") }

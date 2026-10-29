@@ -1,5 +1,6 @@
 package com.chilisaft.undroid.data.repository
 
+import com.chilisaft.undroid.data.models.ParityHistoryStatus
 import com.apollographql.apollo.ApolloClient
 import com.chilisaft.undroid.data.models.ArrayDeviceRole
 import com.chilisaft.undroid.data.models.ArrayRunState
@@ -291,5 +292,26 @@ class ArrayRepositoryTest {
         val result = repository.cancelParityCheck()
 
         assertThat(result).isInstanceOf(WidgetResult.Success::class.java)
+    }
+
+    @Test
+    fun `getParityHistory maps each check and sorts newest first`() = runBlocking {
+        // Shape from a real server (Unraid 7.3.4): speed is bytes per second, as a string.
+        mockWebServer.enqueue(
+            MockResponse().setBody(
+                """{"data": {"parityHistory": [
+                    {"date": "2026-08-10T19:47:33.000Z", "duration": 79, "speed": "0", "status": "CANCELLED", "errors": 6},
+                    {"date": "2026-10-26T09:04:26.000Z", "duration": 37686, "speed": "159241497", "status": "COMPLETED", "errors": 0}
+                ]}}"""
+            )
+        )
+
+        val entries = (repository.getParityHistory() as WidgetResult.Success).data
+
+        assertThat(entries.map { it.status }).containsExactly(ParityHistoryStatus.COMPLETED, ParityHistoryStatus.CANCELLED).inOrder()
+        assertThat(entries[0].date).isEqualTo(java.time.Instant.parse("2026-10-26T09:04:26Z"))
+        assertThat(entries[0].durationSeconds).isEqualTo(37686)
+        assertThat(entries[0].bytesPerSecond).isEqualTo(159241497.0)
+        assertThat(entries[1].errors).isEqualTo(6)
     }
 }

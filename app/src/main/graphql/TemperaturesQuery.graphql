@@ -1,0 +1,22 @@
+query TemperaturesQuery {
+    metrics {
+        temperature {
+            summary {
+                warningCount
+                criticalCount
+            }
+            sensors {
+                id
+                name
+                type
+                current {
+                    value
+                    unit
+                    status
+                }
+                warning
+                critical
+            }
+        }
+    }
+}

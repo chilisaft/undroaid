@@ -122,4 +122,48 @@ class NotificationsViewModelTest {
         assertThat(viewModel.uiState.value.notifications).isEqualTo(WidgetResult.Success(listOf(testNotification)))
         assertThat(viewModel.uiState.value.isDismissingAll).isFalse()
     }
+
+    @Test
+    fun `the archived list loads only once the tab is opened`() {
+        coEvery { repository.getNotifications(archived = true) } returns WidgetResult.Success(listOf(testNotification))
+        viewModel = NotificationsViewModel(repository, userMessages)
+        testDispatcher.scheduler.advanceUntilIdle()
+        coVerify(exactly = 0) { repository.getNotifications(archived = true) }
+
+        viewModel.selectTab(NotificationsTab.ARCHIVED)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.archived).isEqualTo(WidgetResult.Success(listOf(testNotification)))
+        viewModel.selectTab(NotificationsTab.NEW)
+        viewModel.selectTab(NotificationsTab.ARCHIVED)
+        testDispatcher.scheduler.advanceUntilIdle()
+        coVerify(exactly = 1) { repository.getNotifications(archived = true) }
+    }
+
+    @Test
+    fun `restoring reloads both lists`() {
+        coEvery { repository.getNotifications(archived = true) } returns WidgetResult.Success(listOf(testNotification))
+        coEvery { repository.restoreNotification("n1") } returns WidgetResult.Success(Unit)
+        viewModel = NotificationsViewModel(repository, userMessages)
+        viewModel.selectTab(NotificationsTab.ARCHIVED)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.restore("n1")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        coVerify(exactly = 2) { repository.getNotifications(archived = false) }
+        coVerify(exactly = 2) { repository.getNotifications(archived = true) }
+    }
+
+    @Test
+    fun `a failed delete shows a message`() {
+        val failure = WidgetResult.Failure(permissionDenied = true, message = "Forbidden resource")
+        coEvery { repository.deleteArchivedNotification("n1") } returns failure
+        viewModel = NotificationsViewModel(repository, userMessages)
+        viewModel.delete("n1")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        verify { userMessages.showFailure("delete the notification", failure) }
+        assertThat(viewModel.uiState.value.dismissingIds).isEmpty()
+    }
 }

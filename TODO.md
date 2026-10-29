@@ -100,6 +100,31 @@ Checked against a real server (Unraid 7.3.4, API 4.37.9):
 
 ---
 
+## 5. Parity history, temperatures + network, archived notifications - built 2026-10-29
+
+- **Parity history** (Main tab, under Array Operation): the 3 newest checks with "Show all" in a
+  sheet - date, status, duration, average speed, errors (`parityHistory`, ARRAY permission).
+- **Temperature and network** (Dashboard, under CPU/memory): the CPU package temperature (or the
+  hottest sensor) with the server's warm/hot count - tap for every sensor and its limits - and the
+  main interface's download/upload. Both polled every 5 s while the Dashboard is visible
+  (`ServerRepository.observeSensorsPoll`).
+- **Archived notifications** (Notifications -> Archived tab): restore to New, delete one, delete
+  all (both deletes ask first - they're permanent).
+
+Checked against a real server (Unraid 7.3.4):
+- `parityHistory` answers in ~15 ms with every check ever run (79 here), newest first. `speed` is
+  bytes/s as a string - the live `parityCheckStatus.speed` is MB/s. One old entry reports
+  1,395,248,395 errors; shown as sent.
+- `metrics.temperature` answers in ~0.2 s: CPU package and cores, NVMe sensors, warning 70 /
+  critical 85. Sensor names are lm-sensors' raw ones ("coretemp-isa-0000 Core 0").
+- `metrics.network` takes ~1 s and lists every interface, Docker's veth*/br-* included. `rxSec`/
+  `txSec` are computed by the server since the previous call - the first call reads 0. The main
+  interface is the cached `info.primaryNetwork` when known, otherwise br0 / bond* / eth*.
+
+Not tried against the real server yet: restoring and deleting archived notifications.
+
+---
+
 ## Blocked by the Unraid API (not buildable client-side yet)
 
 These were requested but the API has no way to do them. Don't add disabled placeholder buttons -

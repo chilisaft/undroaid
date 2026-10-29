@@ -80,4 +80,11 @@ class FormattingTest {
         assertThat((45L * 60).toRemainingTimeLabel()).isEqualTo("45m")
         assertThat(30L.toRemainingTimeLabel()).isEqualTo("30s")
     }
+
+    @Test
+    fun `bytesPerSecondToLabel uses decimal units`() {
+        assertThat(159241497.0.bytesPerSecondToLabel()).isEqualTo("159.2 MB/s")
+        assertThat(3178.67.bytesPerSecondToLabel()).isEqualTo("3.2 KB/s")
+        assertThat(0.0.bytesPerSecondToLabel()).isEqualTo("0 B/s")
+    }
 }

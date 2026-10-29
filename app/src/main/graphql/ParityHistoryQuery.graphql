@@ -1,0 +1,10 @@
+# `speed` is bytes per second here (e.g. "159241497"), unlike parityCheckStatus's MB/s.
+query ParityHistoryQuery {
+    parityHistory {
+        date
+        duration
+        speed
+        status
+        errors
+    }
+}

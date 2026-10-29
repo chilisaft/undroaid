@@ -181,7 +181,7 @@ fun DockerScreenContent(
         ConfirmActionDialog(
             title = "Update ${targets.size} ${if (targets.size == 1) "container" else "containers"}?",
             text = "Pulls the latest images and recreates these containers. Each is unavailable while it's updated.",
-            confirmLabel = "Update all",
+            confirmLabel = "Update All",
             onConfirm = { onUpdateAll(targets.map { it.id }); confirmUpdateAll = null },
             onDismiss = { confirmUpdateAll = null }
         ) {
@@ -286,7 +286,7 @@ private fun UpdatesCard(
                 if (isChecking) {
                     CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                 } else {
-                    TextButton(onClick = onCheck, enabled = !isUpdating) { Text(if (updates.isEmpty()) "Check" else "Check again") }
+                    TextButton(onClick = onCheck, enabled = !isUpdating) { Text(if (updates.isEmpty()) "Check" else "Check Again") }
                 }
             }
             if (updates.isNotEmpty()) {
@@ -296,7 +296,7 @@ private fun UpdatesCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Button(onClick = { onUpdateAll(updates) }, enabled = !isUpdating && !isChecking, modifier = Modifier.fillMaxWidth()) {
-                    Text(if (isUpdating) "Updating…" else "Update all")
+                    Text(if (isUpdating) "Updating…" else "Update All")
                 }
             }
         }
@@ -438,7 +438,7 @@ fun DockerUpdateAllDialogPreview() {
                 }
                 Row(modifier = Modifier.align(Alignment.End)) {
                     TextButton(onClick = {}) { Text("Cancel") }
-                    TextButton(onClick = {}) { Text("Update all") }
+                    TextButton(onClick = {}) { Text("Update All") }
                 }
             }
         }

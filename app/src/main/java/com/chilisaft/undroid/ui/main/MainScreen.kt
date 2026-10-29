@@ -32,6 +32,9 @@ import com.chilisaft.undroid.data.models.DeviceHealth
 import com.chilisaft.undroid.data.models.DiskIdentification
 import com.chilisaft.undroid.data.models.FlashInfo
 import com.chilisaft.undroid.data.models.ParityCheckInfo
+import com.chilisaft.undroid.data.models.ParityHistoryEntry
+import com.chilisaft.undroid.data.models.ParityHistoryStatus
+import java.time.Instant
 import com.chilisaft.undroid.data.models.WidgetResult
 import com.chilisaft.undroid.ui.components.AppCard
 import com.chilisaft.undroid.ui.components.ConfirmActionDialog
@@ -64,7 +67,8 @@ fun MainScreen(viewModel: MainViewModel = hiltViewModel(), topBarActions: @Compo
         onStartParityCheck = viewModel::startParityCheck,
         onPauseParityCheck = viewModel::pauseParityCheck,
         onResumeParityCheck = viewModel::resumeParityCheck,
-        onCancelParityCheck = viewModel::cancelParityCheck
+        onCancelParityCheck = viewModel::cancelParityCheck,
+        onRetryParityHistory = viewModel::refreshParityHistory
     )
 }
 
@@ -80,7 +84,8 @@ fun MainScreenContent(
     onStartParityCheck: () -> Unit = {},
     onPauseParityCheck: () -> Unit = {},
     onResumeParityCheck: () -> Unit = {},
-    onCancelParityCheck: () -> Unit = {}
+    onCancelParityCheck: () -> Unit = {},
+    onRetryParityHistory: () -> Unit = {}
 ) {
     val spacing = MaterialTheme.spacing
     Scaffold(
@@ -135,6 +140,13 @@ fun MainScreenContent(
                             onResumeParityCheck = onResumeParityCheck,
                             onCancelParityCheck = onCancelParityCheck
                         )
+                    }
+
+                    item { SectionHeader("Parity History") }
+                    item {
+                        WidgetSection(result = uiState.parityHistory, onRetry = onRetryParityHistory, minHeight = 80.dp) { entries ->
+                            ParityHistoryCard(entries)
+                        }
                     }
 
                 }
@@ -327,8 +339,8 @@ private fun PoolCard(poolName: String, devices: List<ArrayDeviceInfo>, identific
         Text(
             text = poolName,
             style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(start = MaterialTheme.spacing.small)
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(start = MaterialTheme.spacing.medium)
         )
         DeviceGroupCard(devices, identifications)
     }
@@ -595,7 +607,15 @@ fun MainScreenPreview() {
                         )
                     )
                 ),
-                flashInfo = WidgetResult.Success(FlashInfo(vendor = "SanDisk", product = "Ultra Fit"))
+                flashInfo = WidgetResult.Success(FlashInfo(vendor = "SanDisk", product = "Ultra Fit")),
+                parityHistory = WidgetResult.Success(
+                    listOf(
+                        ParityHistoryEntry(Instant.parse("2026-10-26T09:04:26Z"), ParityHistoryStatus.COMPLETED, 37686, 159241497.0, 0),
+                        ParityHistoryEntry(Instant.parse("2026-10-02T09:31:05Z"), ParityHistoryStatus.COMPLETED, 37864, 158492898.0, 0),
+                        ParityHistoryEntry(Instant.parse("2026-08-10T19:47:33Z"), ParityHistoryStatus.CANCELLED, 79, 0.0, 6),
+                        ParityHistoryEntry(Instant.parse("2026-08-09T02:52:43Z"), ParityHistoryStatus.COMPLETED, 44293, 135488115.0, 0)
+                    )
+                )
             )
         )
     }

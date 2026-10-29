@@ -7,6 +7,7 @@ import com.chilisaft.undroid.data.models.ArrayRunState
 import com.chilisaft.undroid.data.models.DiskIdentification
 import com.chilisaft.undroid.data.models.FlashInfo
 import com.chilisaft.undroid.data.models.ParityCheckInfo
+import com.chilisaft.undroid.data.models.ParityHistoryEntry
 import com.chilisaft.undroid.data.models.WidgetResult
 import com.chilisaft.undroid.data.models.reloading
 import com.chilisaft.undroid.data.repository.ArrayRepository
@@ -28,6 +29,7 @@ data class MainScreenState(
     val parityCheck: WidgetResult<ParityCheckInfo> = WidgetResult.Loading,
     val diskIdentifications: WidgetResult<List<DiskIdentification>> = WidgetResult.Loading,
     val flashInfo: WidgetResult<FlashInfo> = WidgetResult.Loading,
+    val parityHistory: WidgetResult<List<ParityHistoryEntry>> = WidgetResult.Loading,
     val actioningArray: Boolean = false,
     val actioningParityCheck: Boolean = false,
     /** A full [MainViewModel.refresh] is running - drives the pull-to-refresh indicator, while sections keep showing their current data. */
@@ -83,7 +85,8 @@ class MainViewModel @Inject constructor(
                 launch { refreshOverviewOnce() },
                 launch { refreshParityCheckOnce() },
                 launch { refreshDiskIdentificationsOnce() },
-                launch { refreshFlashInfoOnce() }
+                launch { refreshFlashInfoOnce() },
+                launch { refreshParityHistoryOnce() }
             ).joinAll()
             _uiState.update { it.copy(isRefreshing = false) }
         }
@@ -91,6 +94,10 @@ class MainViewModel @Inject constructor(
 
     fun refreshParityCheck() {
         viewModelScope.launch { refreshParityCheckOnce() }
+    }
+
+    fun refreshParityHistory() {
+        viewModelScope.launch { refreshParityHistoryOnce() }
     }
 
     fun startArray(password: String?) =
@@ -122,6 +129,11 @@ class MainViewModel @Inject constructor(
     private suspend fun refreshDiskIdentificationsOnce() {
         _uiState.update { it.copy(diskIdentifications = it.diskIdentifications.reloading()) }
         _uiState.update { it.copy(diskIdentifications = arrayRepository.getDiskIdentifications()) }
+    }
+
+    private suspend fun refreshParityHistoryOnce() {
+        _uiState.update { it.copy(parityHistory = it.parityHistory.reloading()) }
+        _uiState.update { it.copy(parityHistory = arrayRepository.getParityHistory()) }
     }
 
     private suspend fun refreshFlashInfoOnce() {

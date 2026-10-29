@@ -72,3 +72,16 @@ data class ArrayOverview(
     val parities: List<ArrayDeviceInfo>,
     val disks: List<ArrayDeviceInfo>
 )
+
+/** One past parity check from `parityHistory`. Any field the server leaves out is null. */
+data class ParityHistoryEntry(
+    val date: java.time.Instant?,
+    val status: ParityHistoryStatus,
+    val durationSeconds: Long?,
+    val bytesPerSecond: Double?,
+    val errors: Int?
+)
+
+enum class ParityHistoryStatus(val label: String) {
+    COMPLETED("Completed"), CANCELLED("Cancelled"), FAILED("Failed"), OTHER("Unknown")
+}

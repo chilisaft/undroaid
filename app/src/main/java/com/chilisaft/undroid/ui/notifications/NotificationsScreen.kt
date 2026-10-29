@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Unarchive
 import androidx.compose.material.icons.filled.TaskAlt
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
@@ -56,7 +58,11 @@ fun NotificationsScreen(
         onBack = onBack,
         onRetry = viewModel::refresh,
         onDismiss = viewModel::dismiss,
-        onDismissAll = viewModel::dismissAll
+        onDismissAll = viewModel::dismissAll,
+        onSelectTab = viewModel::selectTab,
+        onRestore = viewModel::restore,
+        onDelete = viewModel::delete,
+        onDeleteAll = viewModel::deleteAllArchived
     )
 }
 
@@ -67,11 +73,20 @@ fun NotificationsScreenContent(
     onBack: () -> Unit = {},
     onRetry: () -> Unit = {},
     onDismiss: (String) -> Unit = {},
-    onDismissAll: () -> Unit = {}
+    onDismissAll: () -> Unit = {},
+    onSelectTab: (NotificationsTab) -> Unit = {},
+    onRestore: (String) -> Unit = {},
+    onDelete: (String) -> Unit = {},
+    onDeleteAll: () -> Unit = {}
 ) {
     val spacing = MaterialTheme.spacing
     var showDismissAllDialog by remember { mutableStateOf(false) }
-    val notificationCount = (uiState.notifications as? WidgetResult.Success)?.data?.size ?: 0
+    var showDeleteAllDialog by remember { mutableStateOf(false) }
+    var deleteTarget by remember { mutableStateOf<Notification?>(null) }
+    val isArchiveTab = uiState.tab == NotificationsTab.ARCHIVED
+    val result = if (isArchiveTab) uiState.archived else uiState.notifications
+    val notificationCount = (result as? WidgetResult.Success)?.data?.size ?: 0
+    val isBulkRunning = if (isArchiveTab) uiState.isDeletingAll else uiState.isDismissingAll
     Scaffold(
         topBar = {
             DetailTopBar(
@@ -79,38 +94,53 @@ fun NotificationsScreenContent(
                 onBack = onBack,
                 actions = {
                     TextButton(
-                        onClick = { showDismissAllDialog = true },
-                        enabled = notificationCount > 0 && !uiState.isDismissingAll
+                        onClick = { if (isArchiveTab) showDeleteAllDialog = true else showDismissAllDialog = true },
+                        enabled = notificationCount > 0 && !isBulkRunning,
+                        colors = if (isArchiveTab) ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error) else ButtonDefaults.textButtonColors()
                     ) {
-                        if (uiState.isDismissingAll) {
+                        if (isBulkRunning) {
                             CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
                         } else {
-                            Text("Dismiss All")
+                            Text(if (isArchiveTab) "Delete All" else "Dismiss All")
                         }
                     }
                 }
             )
         }
     ) { padding ->
-        PullToRefreshBox(
-            isRefreshing = uiState.isRefreshing,
-            onRefresh = onRetry,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = spacing.medium)
-        ) {
-            WidgetSection(result = uiState.notifications, onRetry = onRetry, minHeight = 200.dp) { notifications ->
-                if (notifications.isEmpty()) {
-                    EmptyState("No new notifications")
-                } else {
-                    ScreenList {
-                        items(notifications, key = { it.id }) { notification ->
-                            NotificationRow(
-                                notification = notification,
-                                isDismissing = notification.id in uiState.dismissingIds,
-                                onDismiss = { onDismiss(notification.id) }
-                            )
+        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            PrimaryTabRow(selectedTabIndex = uiState.tab.ordinal) {
+                Tab(selected = !isArchiveTab, onClick = { onSelectTab(NotificationsTab.NEW) }, text = { Text("New") })
+                Tab(selected = isArchiveTab, onClick = { onSelectTab(NotificationsTab.ARCHIVED) }, text = { Text("Archived") })
+            }
+            PullToRefreshBox(
+                isRefreshing = uiState.isRefreshing,
+                onRefresh = onRetry,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = spacing.medium)
+            ) {
+                WidgetSection(result = result, onRetry = onRetry, minHeight = 200.dp) { notifications ->
+                    if (notifications.isEmpty()) {
+                        EmptyState(if (isArchiveTab) "No archived notifications" else "No new notifications")
+                    } else {
+                        ScreenList {
+                            items(notifications, key = { it.id }) { notification ->
+                                NotificationRow(notification = notification, isBusy = notification.id in uiState.dismissingIds) {
+                                    if (isArchiveTab) {
+                                        IconButton(onClick = { onRestore(notification.id) }, modifier = Modifier.size(28.dp)) {
+                                            Icon(Icons.Outlined.Unarchive, contentDescription = "Restore", modifier = Modifier.size(18.dp))
+                                        }
+                                        IconButton(onClick = { deleteTarget = notification }, modifier = Modifier.size(28.dp)) {
+                                            Icon(Icons.Outlined.Delete, contentDescription = "Delete", modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error)
+                                        }
+                                    } else {
+                                        IconButton(onClick = { onDismiss(notification.id) }, modifier = Modifier.size(28.dp)) {
+                                            Icon(Icons.Filled.Close, contentDescription = "Dismiss", modifier = Modifier.size(18.dp))
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -127,10 +157,32 @@ fun NotificationsScreenContent(
             onDismiss = { showDismissAllDialog = false }
         )
     }
+
+    if (showDeleteAllDialog) {
+        ConfirmActionDialog(
+            title = "Delete all archived notifications?",
+            text = "Every archived notification is deleted from the server. This can't be undone.",
+            confirmLabel = "Delete All",
+            onConfirm = onDeleteAll,
+            onDismiss = { showDeleteAllDialog = false },
+            destructive = true
+        )
+    }
+
+    deleteTarget?.let { target ->
+        ConfirmActionDialog(
+            title = "Delete this notification?",
+            text = "\"${target.subject.ifBlank { target.title }}\" is deleted from the server. This can't be undone.",
+            confirmLabel = "Delete",
+            onConfirm = { onDelete(target.id) },
+            onDismiss = { deleteTarget = null },
+            destructive = true
+        )
+    }
 }
 
 @Composable
-private fun NotificationRow(notification: Notification, isDismissing: Boolean, onDismiss: () -> Unit) {
+private fun NotificationRow(notification: Notification, isBusy: Boolean, actions: @Composable RowScope.() -> Unit) {
     val spacing = MaterialTheme.spacing
     val (icon, color) = when (notification.level) {
         NotificationLevel.ALERT -> Icons.Filled.Warning to StatusTone.Error.color
@@ -157,12 +209,10 @@ private fun NotificationRow(notification: Notification, isDismissing: Boolean, o
                 }
             }
             Spacer(Modifier.width(spacing.small))
-            if (isDismissing) {
+            if (isBusy) {
                 CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
             } else {
-                IconButton(onClick = onDismiss, modifier = Modifier.size(28.dp)) {
-                    Icon(Icons.Filled.Close, contentDescription = "Dismiss", modifier = Modifier.size(18.dp))
-                }
+                Row(horizontalArrangement = Arrangement.spacedBy(spacing.small), content = actions)
             }
         }
     }
@@ -201,5 +251,15 @@ fun NotificationsScreenPreview() {
 fun NotificationsScreenEmptyPreview() {
     AppTheme {
         NotificationsScreenContent(uiState = NotificationsScreenState(notifications = WidgetResult.Success(emptyList())))
+    }
+}
+
+@Preview(name = "Archived", showBackground = true)
+@Composable
+fun NotificationsScreenArchivedPreview() {
+    AppTheme {
+        NotificationsScreenContent(
+            uiState = NotificationsScreenState(archived = WidgetResult.Success(previewNotifications), tab = NotificationsTab.ARCHIVED)
+        )
     }
 }

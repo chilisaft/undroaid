@@ -1,0 +1,13 @@
+# Takes ~1 s on a real server (Unraid 7.3.4), so it's polled on its own, slower than CPU/memory.
+# The server computes rxSec/txSec (bytes per second) since the previous call - the first call
+# after a pause reports 0.
+query NetworkRatesQuery {
+    metrics {
+        network {
+            name
+            operstate
+            rxSec
+            txSec
+        }
+    }
+}

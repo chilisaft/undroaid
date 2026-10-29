@@ -2,12 +2,16 @@ package com.chilisaft.undroid.ui.dashboard
 
 import com.chilisaft.undroid.data.models.ArrayStatus
 import com.chilisaft.undroid.data.models.MetricsSample
+import com.chilisaft.undroid.data.models.NetworkRate
 import com.chilisaft.undroid.data.models.ParityCheckInfo
+import com.chilisaft.undroid.data.models.SensorsSample
 import com.chilisaft.undroid.data.models.SystemMetrics
+import com.chilisaft.undroid.data.models.TemperatureOverview
 import com.chilisaft.undroid.data.models.VmDomain
 import com.chilisaft.undroid.data.models.VmRunState
 import com.chilisaft.undroid.data.models.WidgetResult
 import com.chilisaft.undroid.data.repository.NotificationsRepository
+import com.chilisaft.undroid.data.repository.ServerNetworkRepository
 import com.chilisaft.undroid.data.repository.ServerRepository
 import com.chilisaft.undroid.data.repository.VmRepository
 import com.google.common.truth.Truth.assertThat
@@ -35,6 +39,7 @@ class DashboardViewModelTest {
     private lateinit var repository: ServerRepository
     private lateinit var notificationsRepository: NotificationsRepository
     private lateinit var vmRepository: VmRepository
+    private lateinit var serverNetworkRepository: ServerNetworkRepository
 
     private val testDispatcher = StandardTestDispatcher()
 
@@ -52,6 +57,7 @@ class DashboardViewModelTest {
     // collector to rendezvous with - the ViewModel's collector runs on StandardTestDispatcher
     // and only actually processes the value once advanceUntilIdle() is called afterwards.
     private val metricsPollFlow = MutableSharedFlow<MetricsSample>(extraBufferCapacity = 1)
+    private val sensorsPollFlow = MutableSharedFlow<SensorsSample>(extraBufferCapacity = 1)
 
     @Before
     fun setUp() {
@@ -63,7 +69,11 @@ class DashboardViewModelTest {
             coEvery { getSystemMetrics() } returns WidgetResult.Success(testSystemMetrics)
             coEvery { getDockerContainers() } returns WidgetResult.Success(emptyList())
             every { observeSystemMetricsPoll() } returns metricsPollFlow
+            every { observeSensorsPoll(any(), any()) } returns sensorsPollFlow
+            coEvery { getTemperatures() } returns WidgetResult.Success(TemperatureOverview(emptyList(), 0, 0))
+            coEvery { getNetworkRate(any()) } returns WidgetResult.Success(NetworkRate("br0", 0.0, 0.0))
         }
+        serverNetworkRepository = mockk { every { cached() } returns null }
         notificationsRepository = mockk {
             coEvery { getUnreadCount() } returns WidgetResult.Success(0)
         }
@@ -77,7 +87,7 @@ class DashboardViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun createViewModel() = DashboardViewModel(repository, notificationsRepository, vmRepository)
+    private fun createViewModel() = DashboardViewModel(repository, notificationsRepository, vmRepository, serverNetworkRepository)
 
     @Test
     fun `initial state is loading for every widget`() {
@@ -354,5 +364,36 @@ class DashboardViewModelTest {
         testDispatcher.scheduler.advanceUntilIdle()
         assertThat(viewModel.uiState.value.isRefreshing).isFalse()
         assertThat(viewModel.uiState.value.arrayStatus).isEqualTo(WidgetResult.Success(testArrayStatus.copy(statusLabel = "Array Stopped")))
+    }
+
+    @Test
+    fun `sensor readings update while visible, and a failed tick keeps the last one`() {
+        val temperatures = TemperatureOverview(emptyList(), 0, 0)
+        val rate = NetworkRate("br0", 1000.0, 2000.0)
+        viewModel = createViewModel()
+        viewModel.onScreenVisible()
+        testDispatcher.scheduler.runCurrent()
+
+        runBlocking { sensorsPollFlow.emit(SensorsSample(WidgetResult.Success(temperatures), WidgetResult.Success(rate))) }
+        testDispatcher.scheduler.runCurrent()
+        assertThat(viewModel.uiState.value.network).isEqualTo(WidgetResult.Success(rate))
+
+        runBlocking { sensorsPollFlow.emit(SensorsSample(WidgetResult.Failure(false, "timeout"), WidgetResult.Failure(false, "timeout"))) }
+        testDispatcher.scheduler.runCurrent()
+        assertThat(viewModel.uiState.value.temperatures).isEqualTo(WidgetResult.Success(temperatures))
+        assertThat(viewModel.uiState.value.network).isEqualTo(WidgetResult.Success(rate))
+    }
+
+    @Test
+    fun `a permission failure on the first sensor reading is shown`() {
+        viewModel = createViewModel()
+        viewModel.onScreenVisible()
+        testDispatcher.scheduler.runCurrent()
+
+        val denied = WidgetResult.Failure(permissionDenied = true, message = "Forbidden resource")
+        runBlocking { sensorsPollFlow.emit(SensorsSample(denied, denied)) }
+        testDispatcher.scheduler.runCurrent()
+
+        assertThat(viewModel.uiState.value.temperatures).isEqualTo(denied)
     }
 }

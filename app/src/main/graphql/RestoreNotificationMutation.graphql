@@ -1,0 +1,8 @@
+# Moves an archived notification back to unread.
+mutation RestoreNotificationMutation($id: PrefixedID!) {
+    unarchiveNotifications(ids: [$id]) {
+        unread {
+            total
+        }
+    }
+}

@@ -1,0 +1,7 @@
+mutation DeleteAllArchivedNotificationsMutation {
+    deleteArchivedNotifications {
+        archive {
+            total
+        }
+    }
+}

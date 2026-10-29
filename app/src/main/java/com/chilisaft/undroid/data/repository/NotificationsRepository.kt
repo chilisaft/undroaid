@@ -8,9 +8,13 @@ import com.chilisaft.undroid.data.models.NotificationLevel
 import com.chilisaft.undroid.data.models.WidgetResult
 import com.chilisaft.undroid.graphql.ArchiveAllNotificationsMutation
 import com.chilisaft.undroid.graphql.ArchiveNotificationMutation
+import com.chilisaft.undroid.graphql.DeleteAllArchivedNotificationsMutation
+import com.chilisaft.undroid.graphql.DeleteArchivedNotificationMutation
 import com.chilisaft.undroid.graphql.NotificationsListQuery
 import com.chilisaft.undroid.graphql.NotificationsOverviewQuery
+import com.chilisaft.undroid.graphql.RestoreNotificationMutation
 import com.chilisaft.undroid.graphql.type.NotificationImportance
+import com.chilisaft.undroid.graphql.type.NotificationType
 import javax.inject.Inject
 
 class NotificationsRepository @Inject constructor(
@@ -21,8 +25,11 @@ class NotificationsRepository @Inject constructor(
     suspend fun getUnreadCount(): WidgetResult<Int> =
         apolloClient.runWidgetQuery(NotificationsOverviewQuery()) { it.notifications.overview.unread.total }
 
-    suspend fun getNotifications(): WidgetResult<List<Notification>> =
-        apolloClient.runWidgetQuery(NotificationsListQuery()) { data -> data.notifications.list.map { it.toNotification() } }
+    /** The newest 50 unread notifications, or archived ones when [archived] is set. */
+    suspend fun getNotifications(archived: Boolean = false): WidgetResult<List<Notification>> =
+        apolloClient.runWidgetQuery(NotificationsListQuery(if (archived) NotificationType.ARCHIVE else NotificationType.UNREAD)) { data ->
+            data.notifications.list.map { it.toNotification() }
+        }
 
     /** Archives a single notification. Callers should re-fetch [getNotifications] on success. */
     suspend fun archiveNotification(id: String): WidgetResult<Unit> =
@@ -31,6 +38,18 @@ class NotificationsRepository @Inject constructor(
     /** Archives every unread notification. Callers should re-fetch [getNotifications] on success. */
     suspend fun archiveAllNotifications(): WidgetResult<Unit> =
         apolloClient.runWidgetMutation(ArchiveAllNotificationsMutation()) { }
+
+    /** Moves an archived notification back to unread. */
+    suspend fun restoreNotification(id: String): WidgetResult<Unit> =
+        apolloClient.runWidgetMutation(RestoreNotificationMutation(id)) { }
+
+    /** Permanently deletes one archived notification. */
+    suspend fun deleteArchivedNotification(id: String): WidgetResult<Unit> =
+        apolloClient.runWidgetMutation(DeleteArchivedNotificationMutation(id)) { }
+
+    /** Permanently deletes every archived notification. */
+    suspend fun deleteAllArchivedNotifications(): WidgetResult<Unit> =
+        apolloClient.runWidgetMutation(DeleteAllArchivedNotificationsMutation()) { }
 
     private fun NotificationsListQuery.List.toNotification() = Notification(
         id = id,

@@ -1,0 +1,7 @@
+mutation DeleteArchivedNotificationMutation($id: PrefixedID!) {
+    deleteNotification(id: $id, type: ARCHIVE) {
+        archive {
+            total
+        }
+    }
+}

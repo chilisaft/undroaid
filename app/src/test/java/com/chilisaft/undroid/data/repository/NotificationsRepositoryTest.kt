@@ -103,4 +103,42 @@ class NotificationsRepositoryTest {
 
         assertThat(result.permissionDenied).isTrue()
     }
+
+    @Test
+    fun `getNotifications asks for archived notifications when told to`() = runBlocking {
+        mockWebServer.enqueue(MockResponse().setBody("""{"data": {"notifications": {"list": []}}}"""))
+
+        repository.getNotifications(archived = true)
+
+        assertThat(mockWebServer.takeRequest().body.readUtf8()).contains("\"type\":\"ARCHIVE\"")
+    }
+
+    @Test
+    fun `restoreNotification unarchives the given id`() = runBlocking {
+        mockWebServer.enqueue(MockResponse().setBody("""{"data": {"unarchiveNotifications": {"unread": {"total": 1}}}}"""))
+
+        val result = repository.restoreNotification("n1")
+
+        assertThat(result).isEqualTo(WidgetResult.Success(Unit))
+        assertThat(mockWebServer.takeRequest().body.readUtf8()).contains("\"id\":\"n1\"")
+    }
+
+    @Test
+    fun `deleteArchivedNotification deletes the given id`() = runBlocking {
+        mockWebServer.enqueue(MockResponse().setBody("""{"data": {"deleteNotification": {"archive": {"total": 0}}}}"""))
+
+        assertThat(repository.deleteArchivedNotification("n1")).isEqualTo(WidgetResult.Success(Unit))
+        assertThat(mockWebServer.takeRequest().body.readUtf8()).contains("\"id\":\"n1\"")
+    }
+
+    @Test
+    fun `deleteAllArchivedNotifications reports a missing permission`() = runBlocking {
+        mockWebServer.enqueue(
+            MockResponse().setBody("""{"errors": [{"message": "Forbidden resource", "extensions": {"code": "FORBIDDEN"}}], "data": null}""")
+        )
+
+        val result = repository.deleteAllArchivedNotifications()
+
+        assertThat((result as WidgetResult.Failure).permissionDenied).isTrue()
+    }
 }

@@ -1,5 +1,8 @@
 package com.chilisaft.undroid.data.repository
 
+import com.chilisaft.undroid.data.models.TemperatureLevel
+import com.chilisaft.undroid.data.models.SensorKind
+import com.chilisaft.undroid.data.models.NetworkRate
 import com.apollographql.apollo.ApolloClient
 import com.chilisaft.undroid.data.models.DockerContainerState
 import com.chilisaft.undroid.data.models.ConnectStatus
@@ -300,15 +303,15 @@ class ServerRepositoryTest {
     }
 
     @Test
-    fun `getDockerContainers strips the leading slash from container names and maps the icon url`() = runBlocking {
+    fun `getDockerContainers strips the leading slash from container names and maps status and icon url`() = runBlocking {
         val json = """
         {
           "data": {
             "docker": {
               "containers": [
-                { "names": ["/Plex-Media-Server"], "state": "RUNNING", "iconUrl": "https://example.com/plex.png" },
-                { "names": ["/Home-Assistant"], "state": "EXITED", "iconUrl": null },
-                { "names": ["/qBittorrent"], "state": "PAUSED", "iconUrl": null }
+                { "names": ["/Plex-Media-Server"], "state": "RUNNING", "status": "Up 3 hours (healthy)", "iconUrl": "https://example.com/plex.png" },
+                { "names": ["/Home-Assistant"], "state": "EXITED", "status": "Created", "iconUrl": null },
+                { "names": ["/qBittorrent"], "state": "PAUSED", "status": "Up 5 hours (Paused)", "iconUrl": null }
               ]
             }
           }
@@ -323,6 +326,8 @@ class ServerRepositoryTest {
         assertThat(containers[0].name).isEqualTo("Plex-Media-Server")
         assertThat(containers[0].state).isEqualTo(DockerContainerState.RUNNING)
         assertThat(containers[0].iconUrl).isEqualTo("https://example.com/plex.png")
+        assertThat(containers[0].statusText).isEqualTo("Up 3 hours (healthy)")
+        assertThat(containers[1].statusText).isEqualTo("Created")
         assertThat(containers[1].name).isEqualTo("Home-Assistant")
         assertThat(containers[1].state).isEqualTo(DockerContainerState.EXITED)
         assertThat(containers[1].iconUrl).isNull()
@@ -549,5 +554,71 @@ class ServerRepositoryTest {
         val query = ServerConnectQuery().document()
 
         assertThat(query).doesNotContain("apikey")
+    }
+
+    @Test
+    fun `getTemperatures maps sensors and the server's counts`() = runBlocking {
+        mockWebServer.enqueue(
+            MockResponse().setBody(
+                """{"data": {"metrics": {"temperature": {
+                    "summary": {"warningCount": 1, "criticalCount": 0},
+                    "sensors": [
+                        {"id": "nvme:Composite", "name": "nvme-pci-0200 Composite", "type": "NVME",
+                         "current": {"value": 72.5, "unit": "CELSIUS", "status": "WARNING"}, "warning": 70, "critical": 85},
+                        {"id": "coretemp:Package", "name": "coretemp-isa-0000 Package id 0", "type": "CPU_PACKAGE",
+                         "current": {"value": 42, "unit": "CELSIUS", "status": "NORMAL"}, "warning": 70, "critical": 85}
+                    ]}}}}"""
+            )
+        )
+
+        val overview = (repository.getTemperatures() as WidgetResult.Success).data
+
+        assertThat(overview.warningCount).isEqualTo(1)
+        assertThat(overview.sensors[0].level).isEqualTo(TemperatureLevel.WARNING)
+        assertThat(overview.headline?.kind).isEqualTo(SensorKind.CPU_PACKAGE)
+        assertThat(overview.headline?.unitSymbol).isEqualTo("°C")
+    }
+
+    @Test
+    fun `getTemperatures treats a missing temperature block as no sensors`() = runBlocking {
+        mockWebServer.enqueue(MockResponse().setBody("""{"data": {"metrics": {"temperature": null}}}"""))
+
+        val overview = (repository.getTemperatures() as WidgetResult.Success).data
+
+        assertThat(overview.sensors).isEmpty()
+        assertThat(overview.headline).isNull()
+    }
+
+    private val networkBody = """{"data": {"metrics": {"network": [
+        {"name": "lo", "operstate": "unknown", "rxSec": 0, "txSec": 0},
+        {"name": "veth2b565d5", "operstate": "up", "rxSec": 1079.8, "txSec": 4371.9},
+        {"name": "br0", "operstate": "up", "rxSec": 1053.2, "txSec": 3178.7},
+        {"name": "eth0", "operstate": "up", "rxSec": 900.0, "txSec": 3000.0}
+    ]}}}"""
+
+    @Test
+    fun `getNetworkRate uses the preferred interface when listed`() = runBlocking {
+        mockWebServer.enqueue(MockResponse().setBody(networkBody))
+
+        val rate = (repository.getNetworkRate("eth0") as WidgetResult.Success).data
+
+        assertThat(rate).isEqualTo(NetworkRate("eth0", 900.0, 3000.0))
+    }
+
+    @Test
+    fun `getNetworkRate falls back to br0 without a known primary interface`() = runBlocking {
+        mockWebServer.enqueue(MockResponse().setBody(networkBody))
+
+        val rate = (repository.getNetworkRate(null) as WidgetResult.Success).data
+
+        assertThat(rate?.interfaceName).isEqualTo("br0")
+    }
+
+    @Test
+    fun `pickMainInterface prefers br0, then a bond, then ethernet, never virtual interfaces`() {
+        assertThat(pickMainInterface(listOf("veth1", "eth0", "bond0", "br0"))).isEqualTo("br0")
+        assertThat(pickMainInterface(listOf("veth1", "eth0", "bond0"))).isEqualTo("bond0")
+        assertThat(pickMainInterface(listOf("br-18191748cb07", "eth1"))).isEqualTo("eth1")
+        assertThat(pickMainInterface(listOf("lo", "veth1", "tailscale1"))).isNull()
     }
 }

@@ -4,12 +4,15 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.chilisaft.undroid.data.models.ArrayStatus
 import com.chilisaft.undroid.data.models.DockerContainerSummary
+import com.chilisaft.undroid.data.models.NetworkRate
 import com.chilisaft.undroid.data.models.ParityCheckInfo
 import com.chilisaft.undroid.data.models.SystemMetrics
+import com.chilisaft.undroid.data.models.TemperatureOverview
 import com.chilisaft.undroid.data.models.VmDomain
 import com.chilisaft.undroid.data.models.WidgetResult
 import com.chilisaft.undroid.data.models.reloading
 import com.chilisaft.undroid.data.repository.NotificationsRepository
+import com.chilisaft.undroid.data.repository.ServerNetworkRepository
 import com.chilisaft.undroid.data.repository.ServerRepository
 import com.chilisaft.undroid.data.repository.VmRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -24,6 +27,10 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+/** A polled reading replaces the current one, except a failure replacing data already shown. */
+private fun <T> WidgetResult<T>.keepOnFailure(next: WidgetResult<T>): WidgetResult<T> =
+    if (next is WidgetResult.Failure && this is WidgetResult.Success) this else next
+
 private fun DashboardScreenState.mapSystemMetrics(transform: (SystemMetrics) -> SystemMetrics): DashboardScreenState {
     val current = systemMetrics
     return if (current is WidgetResult.Success) copy(systemMetrics = WidgetResult.Success(transform(current.data))) else this
@@ -35,6 +42,9 @@ data class DashboardScreenState(
     val arrayStatus: WidgetResult<ArrayStatus> = WidgetResult.Loading,
     val parityCheck: WidgetResult<ParityCheckInfo> = WidgetResult.Loading,
     val systemMetrics: WidgetResult<SystemMetrics> = WidgetResult.Loading,
+    val temperatures: WidgetResult<TemperatureOverview> = WidgetResult.Loading,
+    /** Null inside a Success when the server lists no usable interface. */
+    val network: WidgetResult<NetworkRate?> = WidgetResult.Loading,
     val containers: WidgetResult<List<DockerContainerSummary>> = WidgetResult.Loading,
     val vms: WidgetResult<List<VmDomain>> = WidgetResult.Loading,
     val unreadNotificationCount: WidgetResult<Int> = WidgetResult.Loading,
@@ -52,7 +62,8 @@ data class DashboardScreenState(
 class DashboardViewModel @Inject constructor(
     private val serverRepository: ServerRepository,
     private val notificationsRepository: NotificationsRepository,
-    private val vmRepository: VmRepository
+    private val vmRepository: VmRepository,
+    private val serverNetworkRepository: ServerNetworkRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(DashboardScreenState())
@@ -60,6 +71,7 @@ class DashboardViewModel @Inject constructor(
 
     private var parityCheckPollJob: Job? = null
     private var liveMetricsJob: Job? = null
+    private var sensorsJob: Job? = null
 
     /** Whether the Dashboard is currently on screen - polling only runs while it is. */
     private var isVisible = false
@@ -79,6 +91,7 @@ class DashboardViewModel @Inject constructor(
         isVisible = true
         if (hasBeenVisible) refresh() else hasBeenVisible = true
         startLiveMetrics()
+        startSensorsPoll()
         if (_uiState.value.parityCheck.isParityCheckRunning()) startParityCheckPollingIfNeeded()
     }
 
@@ -91,6 +104,8 @@ class DashboardViewModel @Inject constructor(
         isVisible = false
         liveMetricsJob?.cancel()
         liveMetricsJob = null
+        sensorsJob?.cancel()
+        sensorsJob = null
         stopParityCheckPolling()
     }
 
@@ -107,6 +122,26 @@ class DashboardViewModel @Inject constructor(
                     it.mapSystemMetrics { metrics ->
                         metrics.copy(cpuLoadPercent = sample.cpuLoadPercent, memoryLoadPercent = sample.memoryLoadPercent)
                     }
+                }
+            }
+        }
+    }
+
+    /**
+     * Temperatures and network throughput while visible (see [ServerRepository.observeSensorsPoll]).
+     * A failed tick keeps the last reading, unless there's none yet - so a permission failure
+     * still shows. The server computes network rates since its previous call, so the first
+     * reading after a pause can be 0.
+     */
+    private fun startSensorsPoll() {
+        if (sensorsJob?.isActive == true) return
+        sensorsJob = viewModelScope.launch {
+            serverRepository.observeSensorsPoll({ serverNetworkRepository.cached()?.network?.interfaceName }).collect { sample ->
+                _uiState.update {
+                    it.copy(
+                        temperatures = it.temperatures.keepOnFailure(sample.temperatures),
+                        network = it.network.keepOnFailure(sample.network)
+                    )
                 }
             }
         }
@@ -139,6 +174,20 @@ class DashboardViewModel @Inject constructor(
 
     fun refreshSystemMetrics() {
         viewModelScope.launch { loadSystemMetrics() }
+    }
+
+    fun refreshTemperatures() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(temperatures = WidgetResult.Loading) }
+            loadTemperatures()
+        }
+    }
+
+    fun refreshNetwork() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(network = WidgetResult.Loading) }
+            loadNetwork()
+        }
     }
 
     fun refreshContainers() {
@@ -177,6 +226,14 @@ class DashboardViewModel @Inject constructor(
     private suspend fun loadSystemMetrics() {
         _uiState.update { it.copy(systemMetrics = it.systemMetrics.reloading()) }
         _uiState.update { it.copy(systemMetrics = serverRepository.getSystemMetrics()) }
+    }
+
+    private suspend fun loadTemperatures() {
+        _uiState.update { it.copy(temperatures = serverRepository.getTemperatures()) }
+    }
+
+    private suspend fun loadNetwork() {
+        _uiState.update { it.copy(network = serverRepository.getNetworkRate(serverNetworkRepository.cached()?.network?.interfaceName)) }
     }
 
     private suspend fun loadContainers() {

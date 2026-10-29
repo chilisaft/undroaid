@@ -321,6 +321,13 @@ Card containers were barely visible against their screen background - see below.
 - The encrypted credentials file is excluded from backup/device transfer (its Keystore key can't
   move devices), and an undecryptable file is reset instead of crashing on launch.
 
+- **Temperatures + network** (2026-10-29): `ServerRepository.observeSensorsPoll`, every 5 s while
+  the Dashboard is visible - its own flow, separate from the 1 s CPU/memory poll, because
+  `metrics.network` takes about a second. Like `observeSystemMetricsPoll` it's a repository flow
+  so ViewModel tests can replace it (a `while` loop inside the ViewModel never goes idle under
+  `advanceUntilIdle`). Unlike it, failures are emitted too, so a missing permission shows before
+  the first reading; after that a failed tick keeps the last reading.
+
 ## Security model (review 2026-10-25)
 
 - **Where the API key may go**: only to the configured server. The OkHttpClient doesn't follow
@@ -410,6 +417,14 @@ copy-pasted variants. New screens should use these rather than hand-rolling a `C
 - **Pending features**: tracked in [TODO.md](TODO.md). (Shares and Server were "coming soon"
   placeholders for a while; both have since been built, and so has Devices, which brought back
   Settings' "Show core devices" switch.)
+
+- **Consistency pass (2026-10-29)**: button and action labels use Title Case ("Show All (79)",
+  "Update All", "Log In Again"); "Show All" buttons span the card and centre their text; the
+  bottom-bar label is "Home" ("Dashboard" nearly touched the screen edge); each tab's top-bar icon
+  matches its bottom-bar icon, and no two places share an icon for different things (Server keeps
+  the rack icon, Devices has the circuit board, the chip stays CPU); side-by-side Dashboard cards
+  share one height (`IntrinsicSize.Min`); the Dashboard's Docker rows show Docker's own status
+  text like the Docker tab.
 
 ## Open gaps — screens that are stubs
 
