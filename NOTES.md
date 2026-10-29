@@ -400,9 +400,8 @@ copy-pasted variants. New screens should use these rather than hand-rolling a `C
   foreground vector, so it can't drift from the home-screen icon), "Undroid" title, theme shapes
   for the fields/button, and it scrolls/pads for the keyboard instead of a fixed 150dp top gap.
 - **Pending features**: tracked in [TODO.md](TODO.md). (Shares and Server were "coming soon"
-  placeholders for a while; both have since been built.) Settings' "Show core
-  devices" switch is hidden (the feature is deferred; the setting still persists). What's left to
-  build for all three is tracked in [TODO.md](TODO.md).
+  placeholders for a while; both have since been built, and so has Devices, which brought back
+  Settings' "Show core devices" switch.)
 
 ## Open gaps — screens that are stubs
 
@@ -818,30 +817,9 @@ Both investigated and confirmed absent (not just unwired) after the VMs tab was 
   above), not adding a disabled placeholder button for either of these - would need `unraid-api`
   to add the capability first.
 
-## Deferred: "Show core devices" / a system devices screen
+## Devices screen (was deferred; built 2026-10-29)
 
-Explicitly decided **not needed for a first version** (2026-07-24) - hardware inventory
-(GPUs/PCI/USB devices) isn't really a "glance-and-act from your phone" concern the way array
-health or Docker containers are, so this is parked rather than in the priority list above. Notes
-in case it comes back:
-
-- The setting itself already exists and persists (`Storage.showCoreList`,
-  `SettingsRepository.showCoreList`, the toggle in `ui/settings/SettingsScreen.kt`) but has
-  **no consumer** - no device list exists anywhere in the app yet.
-- Data would come from `info.devices { gpu, pci, usb, network }` (`schema.graphqls:1698-1712`).
-  `InfoGpu` has `blacklisted` (Unraid's own "unsuitable for passthrough" flag - a real, useful
-  signal, distinct from "core"). `InfoPci` has a `class` string (`lspci`-style, e.g. "VGA
-  compatible controller", "Host bridge"). `InfoUsb` has no classifying field at all (just
-  name/bus/device).
-- The schema has **no `isCore` flag** - nothing tells you "this is essential, don't touch it."
-  The only honest approach found: hide PCI devices whose `class` is pure infrastructure (Host
-  bridge, ISA bridge, SMBus, PCI bridge, System peripheral - an allowlist/denylist to tune
-  against a real device dump, not guessed device-by-device) rather than trying to detect e.g.
-  "the specific GPU driving the console," which the API has no signal for at all. GPUs/USB
-  devices would likely always show regardless of the toggle.
-- Placement was left open between two options: inside the Main tab vs. a new entry in the "More"
-  sheet alongside Shares/Server. Leaned toward the "More" sheet option, and that's more true now
-  than when this was written - Main got built out for real later this same session (array/parity/
-  cache/boot device tables + array control, see "What's actually working" above), so it's no
-  longer an empty stub with wide-open scope; a hardware inventory would need to fit alongside
-  that existing structure rather than define the tab from scratch.
+Built as a More-sheet entry (the placement the earlier notes leaned towards). What a real server
+returns, and why the filter works the way it does, is in TODO.md #3. The one design point worth
+keeping here: the schema has no "core device" flag, so the filter uses the PCI class code
+(`typeid`, a fixed PCI-SIG standard) rather than device names - it doesn't need tuning per board.

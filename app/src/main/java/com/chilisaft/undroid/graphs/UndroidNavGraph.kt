@@ -10,6 +10,7 @@ import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.FolderShared
 import androidx.compose.material.icons.filled.Layers
+import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.outlined.Computer
@@ -47,6 +48,7 @@ import com.chilisaft.undroid.ui.components.TabBarActions
 import com.chilisaft.undroid.ui.main.MainScreen
 import com.chilisaft.undroid.ui.dashboard.DashboardScreen
 import com.chilisaft.undroid.ui.dashboard.DashboardViewModel
+import com.chilisaft.undroid.ui.devices.DevicesScreen
 import com.chilisaft.undroid.ui.docker.DockerScreen
 import com.chilisaft.undroid.ui.notifications.NotificationsScreen
 import com.chilisaft.undroid.ui.server.ServerScreen
@@ -62,11 +64,12 @@ private const val SETTINGS_ROUTE = "settings"
 private const val NOTIFICATIONS_ROUTE = "notifications"
 private const val SHARES_ROUTE = "shares"
 private const val SERVER_ROUTE = "server"
+private const val DEVICES_ROUTE = "devices"
 
 /**
- * Destinations shown as tabs in the bottom bar. Shares and Server are lower-frequency screens,
- * tucked one tap further behind the "More" sheet instead of taking a permanent tab slot (both
- * still pending - see TODO.md). Settings is reached from the account sheet.
+ * Destinations shown as tabs in the bottom bar. Shares, Server and Devices are lower-frequency
+ * screens, tucked one tap further behind the "More" sheet instead of taking a permanent tab slot.
+ * Settings is reached from the account sheet.
  */
 sealed class BottomNavDestination(val title: String, val route: String, val icon: ImageVector, val icon_selected: ImageVector) {
     data object Dashboard : BottomNavDestination(
@@ -149,7 +152,7 @@ fun UndroidNavGraph(
             )
         },
         bottomBar = {
-            // Only shown on the actual tab destinations - Settings/Notifications/Shares/Server
+            // Only shown on the actual tab destinations - Settings/Notifications/Shares/Server/Devices
             // are drill-in screens reached via an icon or a sheet, with their own back
             // button, not tabs. Showing the bar there had nothing correct to highlight (it
             // used to fall back to Dashboard) since none of those routes are in bottomNavItem.
@@ -233,6 +236,9 @@ fun UndroidNavGraph(
             composable(SERVER_ROUTE) {
                 ServerScreen(onBack = { navController.popBackStack() })
             }
+            composable(DEVICES_ROUTE) {
+                DevicesScreen(onBack = { navController.popBackStack() })
+            }
             composable(SETTINGS_ROUTE) {
                 SettingsScreen(onBack = { navController.popBackStack() })
             }
@@ -254,6 +260,10 @@ fun UndroidNavGraph(
             ActionSheetItem(Icons.Filled.Dns, "Server", {
                 showMoreSheet = false
                 navController.navigate(SERVER_ROUTE)
+            })
+            ActionSheetItem(Icons.Filled.Memory, "Devices", {
+                showMoreSheet = false
+                navController.navigate(DEVICES_ROUTE)
             })
         }
     }

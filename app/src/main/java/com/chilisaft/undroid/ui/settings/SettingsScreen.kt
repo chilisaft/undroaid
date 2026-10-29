@@ -26,7 +26,8 @@ fun SettingsScreen(
         uiState = uiState,
         onBack = onBack,
         onThemeModeChange = viewModel::setThemeMode,
-        onUseDynamicColorChange = viewModel::setUseDynamicColor
+        onUseDynamicColorChange = viewModel::setUseDynamicColor,
+        onShowCoreListChange = viewModel::setShowCoreList
     )
 }
 
@@ -36,7 +37,8 @@ fun SettingsScreenContent(
     uiState: SettingsScreenState,
     onBack: () -> Unit = {},
     onThemeModeChange: (ThemeMode) -> Unit = {},
-    onUseDynamicColorChange: (Boolean) -> Unit = {}
+    onUseDynamicColorChange: (Boolean) -> Unit = {},
+    onShowCoreListChange: (Boolean) -> Unit = {}
 ) {
     val spacing = MaterialTheme.spacing
 
@@ -72,9 +74,23 @@ fun SettingsScreenContent(
                 }
             }
 
-            // "Show core devices" (SettingsViewModel.setShowCoreList / Storage.showCoreList) is
-            // persisted but has no consumer yet - its switch is hidden until a screen uses it
-            // (see NOTES.md's "Deferred: Show core devices").
+            SettingsSection(title = "Devices") {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Show core devices", style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            "Also list chipset devices - bridges, memory and bus controllers, USB root hubs - on the Devices screen.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(checked = uiState.showCoreList, onCheckedChange = onShowCoreListChange)
+                }
+            }
         }
     }
 }

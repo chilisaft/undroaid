@@ -62,21 +62,24 @@ milliseconds) is only verified for a key without dates - check against a trial o
 
 ---
 
-## 3. "Show core devices" / system devices screen (deferred)
+## 3. Devices screen - built 2026-10-29
 
-**Status:** deliberately parked - hardware inventory isn't a glance-and-act concern for a first
-version. The **Settings switch is hidden** (`ui/settings/SettingsScreen.kt` has a comment where it
-was); the setting itself still persists (`Storage.showCoreList`, `SettingsRepository.showCoreList`,
-`SettingsViewModel.setShowCoreList`) but nothing reads it.
+More tab -> Devices: PCI devices grouped (Graphics, Storage, Network, USB controllers, Other) and
+USB device names, two independently loading sections (INFO permission). "Core" devices - PCI
+class 05/06/07/08, SMBus 0c05, other serial bus 0c80, USB root hubs - are hidden unless Settings ->
+"Show core devices" is on; a hint under each list says how many are hidden.
 
-**To do when picked up:**
-- [ ] Decide placement: a new "Devices" entry in the More sheet (preferred) vs. a section in Main
-- [ ] Query `info.devices { gpu pci usb network }`
-- [ ] "Core device" filtering: the schema has no `isCore` flag - hide PCI devices by `class` (Host bridge, ISA bridge, SMBus, PCI bridge, System peripheral…), tuned against a real device dump
-- [ ] Show `InfoGpu.blacklisted` (Unraid's "unsuitable for passthrough" flag)
-- [ ] Restore the Settings switch once the screen exists
+Checked against a real server (Unraid 7.3.4), which shaped what's queried:
+- `InfoPci.type`/`productid` and `InfoGpu.type`/`productid` come back null although non-nullable,
+  failing the whole list - so only `id`, `typeid`, `vendorname`, `productname` are selected, and
+  the GPU list (nothing beyond the PCI entry) isn't used. `class` is "other" for almost everything
+  and `vendorid` repeats `typeid` - both unused. `typeid` is the PCI class code the grouping uses.
+- USB `bus`/`device` are null; `info.devices.network` is an empty list - not shown.
+- `blacklisted` was false everywhere - not shown until a real true value can be checked.
 
-Full analysis: NOTES.md → "Deferred: Show core devices".
+Possible follow-ups:
+- [ ] If a later API version fixes `type`/`productid`, the GPU list's `blacklisted` (unsuitable for
+      passthrough) would be worth a warning line on the Graphics group.
 
 ---
 

@@ -1,0 +1,16 @@
+# Only the fields a real server (Unraid 7.3.4) can return: `type` and `productid` come back null
+# despite being non-nullable (failing the whole list), `class` is "other" for nearly everything
+# and `vendorid` repeats `typeid`. `typeid` is the standard PCI class code, which is what the
+# app classifies by.
+query DevicesPciQuery {
+    info {
+        devices {
+            pci {
+                id
+                typeid
+                vendorname
+                productname
+            }
+        }
+    }
+}

@@ -1,0 +1,11 @@
+# Separate from DevicesPciQuery so a server-side failure in one list (see there) can't take the
+# other down. `bus`/`device` were null on a real server, so only the name is used.
+query DevicesUsbQuery {
+    info {
+        devices {
+            usb {
+                name
+            }
+        }
+    }
+}
