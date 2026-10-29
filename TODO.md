@@ -24,13 +24,14 @@ Checked against a real server (Unraid 7.3.3), which corrected the first version:
 - `Share.size` was 0 for every share (Unraid computes it lazily), so "in share" only appears when set.
 - `Share.cache` was false even for shares that clearly live on the cache pool - not used.
 
-Possible follow-ups:
-- [ ] Show where a share lives (cache pool vs array). The API has no direct field; `include`/`exclude`
-      list disks, and matching `free` against Main's pool/array numbers is a heuristic - only if worth it.
-- [ ] `Share.color` (Unraid's protection indicator) and `Share.luksStatus` (encryption) - check their
-      real values against a server, then show them as a `StatusLine` / "encrypted" hint.
-- [ ] Tap a share for details (include/exclude disks, split level, allocator)? Only if wanted -
-      still read-only.
+Tapping a share opens a read-only details sheet: protection, free space, allocation method, split
+level, minimum free space, included/excluded disks. The list only flags shares whose colour says
+some files are unprotected (`yellow`/`red`; only `green-on` has been seen on a real server).
+
+Checked against a real server on 2026-10-29 and deliberately not built:
+- Where a share lives (cache pool vs array): a cache-only and an array-only share reported identical
+  include/exclude/cache/allocator/colour values, so the API can't tell.
+- Encryption (`luksStatus`): "0" on every share, with no encrypted disk to compare against.
 
 ---
 

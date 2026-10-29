@@ -5,5 +5,11 @@ query SharesQuery {
         comment
         free
         size
+        include
+        exclude
+        allocator
+        splitLevel
+        floor
+        color
     }
 }
